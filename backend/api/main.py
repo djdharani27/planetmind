@@ -15,6 +15,7 @@ from backend.api.routes.compliance import router as compliance_router
 from backend.api.routes.lessons import router as lessons_router
 from backend.api.routes.graph_api import router as graph_router
 from backend.api.routes.auth import router as auth_router
+from backend.api.routes.admin import router as admin_router
 from backend.auth import get_current_user
 from fastapi import Depends
 
@@ -47,6 +48,7 @@ app.include_router(compliance_router, dependencies=[Depends(get_current_user)])
 app.include_router(lessons_router, dependencies=[Depends(get_current_user)])
 app.include_router(graph_router, dependencies=[Depends(get_current_user)])
 app.include_router(auth_router)
+app.include_router(admin_router, dependencies=[Depends(get_current_user)])
 
 settings.processed_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/storage/processed", StaticFiles(directory=str(settings.processed_dir)), name="processed")

@@ -11,6 +11,7 @@ import MaintenancePage from "./pages/MaintenancePage";
 import CompliancePage from "./pages/CompliancePage";
 import LessonsPage from "./pages/LessonsPage";
 import GraphPage from "./pages/GraphPage";
+import AdminPage from "./pages/AdminPage";
 
 const nav = [
   { to: "/", label: "Dashboard" },
@@ -21,6 +22,7 @@ const nav = [
   { to: "/maintenance", label: "Maintenance" },
   { to: "/compliance", label: "Compliance" },
   { to: "/lessons", label: "Lessons" },
+  { to: "/admin", label: "Admin" },
 ];
 
 function ProtectedRoute({ children }) {
@@ -87,6 +89,7 @@ function AppRoutes() {
         <Route path="/compliance" element={<ProtectedRoute><CompliancePage /></ProtectedRoute>} />
         <Route path="/lessons" element={<ProtectedRoute><LessonsPage /></ProtectedRoute>} />
         <Route path="/graph" element={<ProtectedRoute><GraphPage /></ProtectedRoute>} />
+        <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
         <Route path="/documents/:id" element={<ProtectedRoute><DocViewer /></ProtectedRoute>} />
       </Routes>
     </div>

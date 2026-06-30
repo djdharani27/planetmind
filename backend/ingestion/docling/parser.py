@@ -14,8 +14,12 @@ def parse_document(doc_id: str, text: str) -> dict:
         logger.warning(f"Docling not installed; skipping structured parsing for {doc_id}")
         return {"document_id": doc_id, "title": "", "sections": [], "parsed_at": datetime.now(timezone.utc).isoformat()}
 
+    upload_dir = settings.uploads_dir / doc_id
+    files = list(upload_dir.iterdir()) if upload_dir.exists() else []
+    file_path = files[0] if files else upload_dir
+
     converter = DocumentConverter()
-    result = converter.convert(str(settings.uploads_dir / doc_id))
+    result = converter.convert(str(file_path))
     doc = result.document
 
     parsed = {

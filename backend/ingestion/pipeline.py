@@ -60,27 +60,45 @@ def process_document(doc_id: str, llm_client=None) -> dict:
 
     _update_status(doc_id, "ocr_complete")
 
-    # Step 2: Simple parsing (heading detection)
+    # Step 2: Structured parsing (Docling if available, fallback to regex)
     output_dir = settings.processed_dir / doc_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    sections = _simple_parse(text)
-    parsed = {"document_id": doc_id, "sections": sections, "parsed_at": datetime.now(timezone.utc).isoformat()}
-    with open(output_dir / "parsed_output.json", "w", encoding="utf-8") as f:
-        json.dump(parsed, f, ensure_ascii=False, indent=2)
-    steps["parse"] = "completed"
+    try:
+        from backend.ingestion.docling.parser import parse_document
+        parsed = parse_document(doc_id, text)
+        steps["parse"] = "docling"
+    except Exception as e:
+        logger.info(f"Docling unavailable for {doc_id} ({e}), falling back to simple parse")
+        sections = _simple_parse(text)
+        parsed = {"document_id": doc_id, "sections": sections, "parsed_at": datetime.now(timezone.utc).isoformat()}
+        with open(output_dir / "parsed_output.json", "w", encoding="utf-8") as f:
+            json.dump(parsed, f, ensure_ascii=False, indent=2)
+        steps["parse"] = "simple_parse"
     _update_status(doc_id, "parsing_complete")
 
-    # Step 3: Chunking
-    chunks = _simple_chunk(doc_id, text)
-    with open(output_dir / "chunks.json", "w", encoding="utf-8") as f:
-        json.dump(chunks, f, ensure_ascii=False, indent=2)
-    steps["chunk"] = "completed"
+    # Step 3: Chunking (LlamaIndex if available, fallback to sentence split)
+    try:
+        from backend.ingestion.chunking.chunker import chunk_document
+        chunks = chunk_document(doc_id, parsed, text)
+        steps["chunk"] = "llama_index"
+    except Exception as e:
+        logger.info(f"LlamaIndex unavailable for {doc_id} ({e}), falling back to simple chunk")
+        chunks = _simple_chunk(doc_id, text)
+        with open(output_dir / "chunks.json", "w", encoding="utf-8") as f:
+            json.dump(chunks, f, ensure_ascii=False, indent=2)
+        steps["chunk"] = "simple_chunk"
     _update_status(doc_id, "chunking_complete")
 
-    # Step 4: Embeddings (needs Qdrant + BGE-M3 — skipped gracefully)
-    _update_status(doc_id, "embeddings_complete")
-    steps["embed"] = "skipped_no_service"
+    # Step 4: Embeddings (BGE-M3 + Qdrant if available, fallback to skip)
+    try:
+        from backend.embeddings.embedder import generate_and_store_embeddings
+        vectors_stored = generate_and_store_embeddings(doc_id, chunks)
+        steps["embed"] = f"bge_m3_{vectors_stored}_vectors" if vectors_stored else "skipped_no_service"
+    except Exception as e:
+        logger.info(f"Embedding generation skipped for {doc_id}: {e}")
+        _update_status(doc_id, "embeddings_complete")
+        steps["embed"] = "skipped_no_service"
 
     # Step 5: Entity extraction
     from backend.llm.entity_extractor import extract_entities
@@ -158,15 +176,16 @@ def _simple_chunk(doc_id: str, text: str) -> list[dict]:
 
     for sentence in sentences:
         if len(current_chunk) + len(sentence) > chunk_size and current_chunk:
+            chunk_idx = len(chunks)
             chunks.append({
-                "chunk_id": f"{doc_id}_c{len(chunks)}",
+                "chunk_id": f"{doc_id}_c{chunk_idx}",
                 "document_id": doc_id,
                 "page_number": 1,
                 "section": "",
                 "chunk_text": current_chunk.strip(),
                 "token_count": len(current_chunk.split()),
-                "previous_chunk_id": f"{doc_id}_c{len(chunks) - 1}" if chunks else None,
-                "next_chunk_id": None,
+                "previous_chunk_id": f"{doc_id}_c{chunk_idx - 1}" if chunk_idx > 0 else None,
+                "next_chunk_id": f"{doc_id}_c{chunk_idx + 1}",
                 "equipment_tags": _extract_equipment(current_chunk),
                 "created_at": datetime.now(timezone.utc).isoformat(),
             })
@@ -175,21 +194,19 @@ def _simple_chunk(doc_id: str, text: str) -> list[dict]:
             current_chunk += " " + sentence
 
     if current_chunk.strip():
+        chunk_idx = len(chunks)
         chunks.append({
-            "chunk_id": f"{doc_id}_c{len(chunks)}",
+            "chunk_id": f"{doc_id}_c{chunk_idx}",
             "document_id": doc_id,
             "page_number": 1,
             "section": "",
             "chunk_text": current_chunk.strip(),
             "token_count": len(current_chunk.split()),
-            "previous_chunk_id": f"{doc_id}_c{len(chunks) - 1}" if chunks else None,
+            "previous_chunk_id": f"{doc_id}_c{chunk_idx - 1}" if chunk_idx > 0 else None,
             "next_chunk_id": None,
             "equipment_tags": _extract_equipment(current_chunk),
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
-
-    for i in range(len(chunks)):
-        chunks[i]["next_chunk_id"] = chunks[i + 1]["chunk_id"] if i + 1 < len(chunks) else None
 
     return chunks
 

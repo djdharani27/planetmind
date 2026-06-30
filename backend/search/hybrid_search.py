@@ -95,7 +95,7 @@ def _rerank_with_bge(query: str, candidates: list[dict]) -> list[dict]:
         reranker = FlagReranker("BAAI/bge-reranker-v2-m3", use_fp16=True)
 
         pairs = [[query, c.get("snippet", "")] for c in candidates]
-        scores = reranker.compute_score(pairs)
+        scores = reranker.compute_score(pairs, normalize=True)
 
         if not isinstance(scores, list):
             scores = [scores]
@@ -124,11 +124,11 @@ def _vector_search(query: str, top_k: int) -> list[dict]:
         query_embedding = model.encode([query], batch_size=1)
         query_vec = query_embedding["dense_vecs"][0].tolist()
 
-        hits = qdrant.search(
+        hits = qdrant.query_points(
             collection_name="planetmind_chunks",
-            query_vector=query_vec,
+            query=query_vec,
             limit=top_k,
-        )
+        ).points
 
         results = []
         for hit in hits:

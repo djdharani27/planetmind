@@ -20,8 +20,7 @@ def search_graph(query: str, top_k: int = 10) -> list[dict]:
                    RETURN d.id AS document_id, matches
                    ORDER BY matches DESC
                    LIMIT $top_k""",
-                query=query,
-                top_k=top_k,
+                parameters={"query": query, "top_k": top_k},
             )
             records = list(result)
         driver.close()

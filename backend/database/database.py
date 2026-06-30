@@ -28,9 +28,34 @@ def init_db() -> None:
         )
     """)
 
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            password_hash TEXT NOT NULL,
+            role TEXT NOT NULL DEFAULT 'operator',
+            created_at TEXT NOT NULL DEFAULT (datetime('now'))
+        )
+    """)
+
     conn.commit()
+
+    _seed_default_user(conn)
+
     conn.close()
     logger.info(f"Database initialized at {db_path}")
+
+
+def _seed_default_user(conn):
+    existing = conn.execute("SELECT COUNT(*) as c FROM users").fetchone()["c"]
+    if existing == 0:
+        from backend.auth import hash_password
+        conn.execute(
+            "INSERT INTO users (username, password_hash, role) VALUES (?, ?, ?)",
+            ("admin", hash_password("admin123"), "admin"),
+        )
+        conn.commit()
+        logger.info("Default user created: admin / admin123")
 
 
 def get_connection() -> sqlite3.Connection:

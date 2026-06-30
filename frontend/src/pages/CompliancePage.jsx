@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiFetch } from "../lib/api";
 
 export default function CompliancePage() {
   const [query, setQuery] = useState("");
@@ -11,13 +12,12 @@ export default function CompliancePage() {
     if (!query.trim()) return;
     setLoading(true);
     try {
-      const endpoint = mode === "analyze" ? "/api/compliance/analyze" : "/api/compliance/audit";
-      const res = await fetch(endpoint, {
+      const endpoint = mode === "analyze" ? "/compliance/analyze" : "/compliance/audit";
+      const data = await apiFetch(endpoint, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query, regulation: regulation || null, top_k: 15 }),
       });
-      setResult(await res.json());
+      setResult(data);
     } catch {
       setResult({ error: "Analysis failed" });
     }

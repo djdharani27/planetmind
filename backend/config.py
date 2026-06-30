@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     neo4j_user: str = "neo4j"
     neo4j_password: str = "password"
 
+    jwt_secret: str = "change-me-in-production"
+    jwt_expire_minutes: int = 480
+
     prompts_dir: Path = project_root / "prompts"
 
     model_config = {"env_file": str(Path(__file__).resolve().parent.parent / ".env"), "extra": "ignore"}

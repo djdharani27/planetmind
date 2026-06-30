@@ -14,6 +14,9 @@ from backend.api.routes.maintenance import router as maintenance_router
 from backend.api.routes.compliance import router as compliance_router
 from backend.api.routes.lessons import router as lessons_router
 from backend.api.routes.graph_api import router as graph_router
+from backend.api.routes.auth import router as auth_router
+from backend.auth import get_current_user
+from fastapi import Depends
 
 
 @asynccontextmanager
@@ -34,15 +37,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-app.include_router(documents_router)
-app.include_router(pipeline_router)
-app.include_router(search_router)
-app.include_router(chat_router)
-app.include_router(dashboard_router)
-app.include_router(maintenance_router)
-app.include_router(compliance_router)
-app.include_router(lessons_router)
-app.include_router(graph_router)
+app.include_router(documents_router, dependencies=[Depends(get_current_user)])
+app.include_router(pipeline_router, dependencies=[Depends(get_current_user)])
+app.include_router(search_router, dependencies=[Depends(get_current_user)])
+app.include_router(chat_router, dependencies=[Depends(get_current_user)])
+app.include_router(dashboard_router, dependencies=[Depends(get_current_user)])
+app.include_router(maintenance_router, dependencies=[Depends(get_current_user)])
+app.include_router(compliance_router, dependencies=[Depends(get_current_user)])
+app.include_router(lessons_router, dependencies=[Depends(get_current_user)])
+app.include_router(graph_router, dependencies=[Depends(get_current_user)])
+app.include_router(auth_router)
 
 settings.processed_dir.mkdir(parents=True, exist_ok=True)
 app.mount("/storage/processed", StaticFiles(directory=str(settings.processed_dir)), name="processed")

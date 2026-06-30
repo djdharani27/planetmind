@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
-
-const API = "/api/documents";
+import { apiFetch, apiUpload } from "../lib/api";
 
 export default function UploadPage() {
   const [dragOver, setDragOver] = useState(false);
@@ -12,8 +11,7 @@ export default function UploadPage() {
 
   const fetchDocs = useCallback(async () => {
     try {
-      const res = await fetch(API);
-      const data = await res.json();
+      const data = await apiFetch("/documents");
       setDocuments(data.documents || []);
     } catch {
       setDocuments([]);
@@ -52,9 +50,8 @@ export default function UploadPage() {
       const form = new FormData();
       form.append("file", file);
       try {
-        const res = await fetch(`${API}/upload`, { method: "POST", body: form });
-        if (res.ok) ok++;
-        else fail++;
+        await apiUpload("/documents/upload", form);
+        ok++;
       } catch {
         fail++;
       }

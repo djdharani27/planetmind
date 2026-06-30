@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { apiFetch } from "../lib/api";
 
 const FILTERS = [
   { key: "equipment", label: "Equipment" },
@@ -26,12 +27,10 @@ export default function SearchPage() {
     setLoading(true);
     try {
       const body = { query, top_k: 15, ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) };
-      const res = await fetch("/api/search", {
+      const data = await apiFetch("/search", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = await res.json();
       setResults(data);
     } catch {
       setResults(null);

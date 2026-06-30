@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { apiFetch } from "../lib/api";
 
 export default function DocViewer() {
   const { id } = useParams();
@@ -15,8 +16,7 @@ export default function DocViewer() {
   const [runningJob, setRunningJob] = useState(null);
 
   useEffect(() => {
-    fetch(`/api/documents/${id}`)
-      .then((r) => r.json())
+    apiFetch(`/documents/${id}`)
       .then((d) => {
         setDoc(d);
         setLoading(false);
@@ -43,12 +43,10 @@ export default function DocViewer() {
   const process = async () => {
     setProcessStatus("starting");
     try {
-      const res = await fetch("/api/pipeline/process-async", {
+      const data = await apiFetch("/pipeline/process-async", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ document_id: id }),
       });
-      const data = await res.json();
       setRunningJob(data.job_id);
       pollJob(data.job_id);
     } catch {
@@ -64,7 +62,7 @@ export default function DocViewer() {
         setProcessStatus(job);
         if (job.status === "completed" || job.status === "failed") {
           clearInterval(interval);
-          const refreshed = await fetch(`/api/documents/${id}`).then((r) => r.json());
+          const refreshed = await apiFetch(`/documents/${id}`);
           setDoc(refreshed);
           if (job.status === "completed") loadProcessedData();
           setRunningJob(null);

@@ -1,16 +1,15 @@
 import { useState, useEffect } from "react";
+import { apiFetch } from "../lib/api";
 
 export default function DashboardPage() {
   const [stats, setStats] = useState(null);
   const [jobs, setJobs] = useState([]);
 
   const fetchStats = () => {
-    fetch("/api/dashboard")
-      .then((r) => r.json())
+    apiFetch("/dashboard")
       .then(setStats)
       .catch(() => {});
-    fetch("/api/pipeline/jobs")
-      .then((r) => r.json())
+    apiFetch("/pipeline/jobs")
       .then(setJobs)
       .catch(() => {});
   };

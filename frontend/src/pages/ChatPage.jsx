@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { apiFetch } from "../lib/api";
 
 export default function ChatPage() {
   const [question, setQuestion] = useState("");
@@ -13,12 +14,10 @@ export default function ChatPage() {
     setLoading(true);
 
     try {
-      const res = await fetch("/api/chat", {
+      const data = await apiFetch("/chat", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ question: q, top_k: 10 }),
       });
-      const data = await res.json();
       setMessages((prev) => [
         ...prev,
         { role: "assistant", content: data.answer, meta: data },

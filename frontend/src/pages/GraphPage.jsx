@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import * as vis from "vis-network/standalone";
 import "vis-network/styles/vis-network.css";
+import { apiFetch } from "../lib/api";
 
 const GROUP_COLORS = {
   equipment: { border: "#3b82f6", background: "#1e3a5f", highlight: "#60a5fa" },
@@ -23,11 +24,10 @@ export default function GraphPage() {
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const loadGraph = async (url) => {
+  const loadGraph = async (path) => {
     setLoading(true);
     try {
-      const res = await fetch(url);
-      const data = await res.json();
+      const data = await apiFetch(path);
       if (data.warning) {
         setSelected({ type: "warning", message: data.warning });
         setNodes([]);
@@ -45,7 +45,7 @@ export default function GraphPage() {
 
   useEffect(() => {
     // Load overview on mount
-    loadGraph("/api/graph");
+    loadGraph("/graph");
 
     return () => {
       if (networkRef.current) networkRef.current.destroy();
@@ -124,7 +124,7 @@ export default function GraphPage() {
 
   const loadForDoc = () => {
     if (!docId.trim()) return;
-    loadGraph(`/api/graph/${docId.trim()}`);
+    loadGraph(`/graph/${docId.trim()}`);
   };
 
   return (

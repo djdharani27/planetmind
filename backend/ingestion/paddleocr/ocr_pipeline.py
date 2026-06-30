@@ -11,7 +11,11 @@ def run_ocr(doc_id: str, file_path: Path) -> dict:
     Extract text from scanned documents using PaddleOCR.
     Returns OCR result with text, confidence scores, and page data.
     """
-    from paddleocr import PaddleOCR
+    try:
+        from paddleocr import PaddleOCR
+    except ImportError:
+        logger.warning(f"PaddleOCR not installed; skipping OCR for {doc_id}")
+        return {"document_id": doc_id, "pages": [], "total_text": "", "avg_confidence": 0.0, "processed_at": datetime.now(timezone.utc).isoformat()}
 
     ocr = PaddleOCR(use_angle_cls=True, lang="en", show_log=False)
     result = ocr.ocr(str(file_path), cls=True)

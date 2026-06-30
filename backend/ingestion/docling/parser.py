@@ -8,7 +8,11 @@ from backend.logging_config import logger
 
 def parse_document(doc_id: str, text: str) -> dict:
     """Parse document using Docling to extract structure: headings, tables, lists, paragraphs."""
-    from docling.document_converter import DocumentConverter
+    try:
+        from docling.document_converter import DocumentConverter
+    except ImportError:
+        logger.warning(f"Docling not installed; skipping structured parsing for {doc_id}")
+        return {"document_id": doc_id, "title": "", "sections": [], "parsed_at": datetime.now(timezone.utc).isoformat()}
 
     converter = DocumentConverter()
     result = converter.convert(str(settings.uploads_dir / doc_id))

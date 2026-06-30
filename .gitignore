@@ -21,6 +21,9 @@ storage/cache/*
 !storage/processed/.gitkeep
 !storage/cache/.gitkeep
 
+# Test files
+test.pdf
+
 # Env
 .env
 

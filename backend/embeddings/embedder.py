@@ -17,15 +17,23 @@ def generate_and_store_embeddings(doc_id: str, chunks: list[dict]) -> int:
 
     model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
 
-    qdrant = QdrantClient(host="localhost", port=6333)
+    try:
+        qdrant = QdrantClient(host="localhost", port=6333)
+    except Exception as e:
+        logger.warning(f"Qdrant connection failed for {doc_id}: {e}")
+        return 0
     collection_name = "planetmind_chunks"
 
-    existing = qdrant.get_collections()
-    if collection_name not in [c.name for c in existing.collections]:
-        qdrant.create_collection(
-            collection_name=collection_name,
-            vectors_config=VectorParams(size=1024, distance=Distance.COSINE),
-        )
+    try:
+        existing = qdrant.get_collections()
+        if collection_name not in [c.name for c in existing.collections]:
+            qdrant.create_collection(
+                collection_name=collection_name,
+                vectors_config=VectorParams(size=1024, distance=Distance.COSINE),
+            )
+    except Exception as e:
+        logger.warning(f"Qdrant setup failed for {doc_id}: {e}")
+        return 0
 
     texts = [c["chunk_text"] for c in chunks]
     embeddings = model.encode(texts, batch_size=32)
@@ -46,7 +54,11 @@ def generate_and_store_embeddings(doc_id: str, chunks: list[dict]) -> int:
             },
         ))
 
-    qdrant.upsert(collection_name=collection_name, points=points)
+    try:
+        qdrant.upsert(collection_name=collection_name, points=points)
+    except Exception as e:
+        logger.warning(f"Qdrant upsert failed for {doc_id}: {e}")
+        return 0
 
     conn = get_connection()
     conn.execute(

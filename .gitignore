@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# Node
+node_modules/
+frontend/dist/
+
+# Database
+sqlite/*.db
+
+# Logs
+*.log
+
+# Assets
+storage/uploads/*
+storage/processed/*
+storage/cache/*
+!storage/uploads/.gitkeep
+!storage/processed/.gitkeep
+!storage/cache/.gitkeep
+
+# Env
+.env
+
+# IDE
+.idea/
+.vscode/
+*.swp

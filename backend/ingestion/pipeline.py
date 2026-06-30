@@ -10,7 +10,11 @@ from backend.logging_config import logger
 
 
 def process_document(doc_id: str, llm_client=None) -> dict:
-    """Fast processing pipeline — uses PyMuPDF for text, LlamaIndex for chunks, regex for entities."""
+    """Processing pipeline — uses PyMuPDF for text, intelligent parsers/chunkers/embeddings."""
+    if llm_client is None:
+        from backend.llm.client import create_llm_client
+        llm_client = create_llm_client()
+
     conn = get_connection()
     doc = conn.execute("SELECT * FROM documents WHERE id = ?", (doc_id,)).fetchone()
     conn.close()
@@ -78,9 +82,9 @@ def process_document(doc_id: str, llm_client=None) -> dict:
     _update_status(doc_id, "embeddings_complete")
     steps["embed"] = "skipped_no_service"
 
-    # Step 5: Entity extraction (regex-based, fast)
-    from backend.llm.entity_extractor import _regex_extract
-    entities = _regex_extract(text)
+    # Step 5: Entity extraction
+    from backend.llm.entity_extractor import extract_entities
+    entities = extract_entities(doc_id, text, llm_client)
     with open(output_dir / "entities.json", "w", encoding="utf-8") as f:
         json.dump(entities, f, ensure_ascii=False, indent=2)
     steps["entities"] = "completed"

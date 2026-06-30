@@ -42,6 +42,10 @@ def build_context(search_results: list[dict]) -> str:
 
 def generate_answer(question: str, search_results: list[dict], llm_client=None) -> dict:
     """Generate AI answer with sources, confidence, and related entities."""
+    if llm_client is None:
+        from backend.llm.client import create_llm_client
+        llm_client = create_llm_client()
+
     context = build_context(search_results)
     prompt = CHAT_SYSTEM_PROMPT.format(context=context, question=question)
 

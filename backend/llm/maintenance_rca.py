@@ -49,6 +49,10 @@ RCA_SYSTEM_PROMPT = _load_rca_prompt()
 
 
 def analyze_maintenance(query: str, top_k: int = 15, llm_client=None) -> dict:
+    if llm_client is None:
+        from backend.llm.client import create_llm_client
+        llm_client = create_llm_client()
+
     results = hybrid_search(query, top_k)
     search_results = results["results"]
 

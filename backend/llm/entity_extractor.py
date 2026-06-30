@@ -43,6 +43,10 @@ Return ONLY valid JSON: {{"entities": [{{"type": "...", "value": "...", "context
 
 def extract_entities(doc_id: str, text: str, llm_client=None) -> list[dict]:
     """Extract entities using LLM or fallback to regex patterns."""
+    if llm_client is None:
+        from backend.llm.client import create_llm_client
+        llm_client = create_llm_client()
+
     entities = []
 
     if llm_client:

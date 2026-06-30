@@ -80,9 +80,37 @@ def _merge_and_rerank(query: str, results: list[dict], top_k: int) -> list[dict]
     for r in sorted(results, key=lambda x: x["score"], reverse=True):
         if r.get("document_id") not in seen_ids:
             seen_ids.add(r["document_id"])
-            r["rerank_score"] = r["score"]
             deduplicated.append(r)
-    return deduplicated[:top_k]
+
+    reranked = _rerank_with_bge(query, deduplicated)
+    return reranked[:top_k]
+
+
+def _rerank_with_bge(query: str, candidates: list[dict]) -> list[dict]:
+    if not candidates:
+        return candidates
+
+    try:
+        from FlagEmbedding import FlagReranker
+        reranker = FlagReranker("BAAI/bge-reranker-v2-m3", use_fp16=True)
+
+        pairs = [[query, c.get("snippet", "")] for c in candidates]
+        scores = reranker.compute_score(pairs)
+
+        if not isinstance(scores, list):
+            scores = [scores]
+
+        for i, c in enumerate(candidates):
+            c["rerank_score"] = float(scores[i]) if i < len(scores) else c["score"]
+
+        candidates.sort(key=lambda x: x["rerank_score"], reverse=True)
+        return candidates
+    except Exception as e:
+        logger.info(f"BGE reranker unavailable ({e}), falling back to score-based ordering")
+        for c in candidates:
+            c["rerank_score"] = c.get("score", 0)
+        candidates.sort(key=lambda x: x["rerank_score"], reverse=True)
+        return candidates
 
 
 def _vector_search(query: str, top_k: int) -> list[dict]:

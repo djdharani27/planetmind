@@ -1,3 +1,4 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from backend.config import settings
@@ -8,9 +9,20 @@ from backend.api.routes.pipeline import router as pipeline_router
 from backend.api.routes.search import router as search_router
 from backend.api.routes.chat import router as chat_router
 from backend.api.routes.dashboard import router as dashboard_router
+from backend.api.routes.maintenance import router as maintenance_router
+from backend.api.routes.compliance import router as compliance_router
+from backend.api.routes.lessons import router as lessons_router
 
 
-app = FastAPI(title=settings.app_name, version=settings.app_version)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    logger.info(f"{settings.app_name} v{settings.app_version} starting up")
+    yield
+    logger.info(f"{settings.app_name} shutting down")
+
+
+app = FastAPI(title=settings.app_name, version=settings.app_version, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -25,12 +37,9 @@ app.include_router(pipeline_router)
 app.include_router(search_router)
 app.include_router(chat_router)
 app.include_router(dashboard_router)
-
-
-@app.on_event("startup")
-async def startup():
-    init_db()
-    logger.info(f"{settings.app_name} v{settings.app_version} starting up")
+app.include_router(maintenance_router)
+app.include_router(compliance_router)
+app.include_router(lessons_router)
 
 
 @app.get("/health")

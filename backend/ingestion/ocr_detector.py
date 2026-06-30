@@ -22,15 +22,23 @@ def detect_document_type(file_path: Path, file_type: str) -> dict:
 
     if file_type == "application/pdf":
         return _analyze_pdf(file_path)
-    elif file_type in ("image/jpeg", "image/png"):
+    elif file_type in ("image/jpeg", "image/png", "image/tiff"):
         result["needs_ocr"] = True
         result["detection_method"] = "image_always_ocr"
         result["page_count"] = 1
         return result
-    elif file_type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+    elif file_type in (
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "application/vnd.ms-excel",
+        "text/csv",
+        "text/plain",
+        "message/rfc822",
+        "application/vnd.ms-outlook",
+    ):
         result["needs_ocr"] = False
         result["has_text"] = True
-        result["detection_method"] = "docx_native"
+        result["detection_method"] = "native_format"
         result["page_count"] = 1
         return result
 

@@ -8,6 +8,13 @@ ALLOWED_TYPES = {
     "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
     "image/jpeg": "jpg",
     "image/png": "png",
+    "text/csv": "csv",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": "xlsx",
+    "application/vnd.ms-excel": "xls",
+    "message/rfc822": "eml",
+    "application/vnd.ms-outlook": "msg",
+    "text/plain": "txt",
+    "image/tiff": "tiff",
 }
 
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB

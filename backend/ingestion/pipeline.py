@@ -10,6 +10,7 @@ from backend.ingestion.chunking.chunker import chunk_document
 from backend.embeddings.embedder import generate_and_store_embeddings
 from backend.llm.entity_extractor import extract_entities
 from backend.graph.graph_builder import build_knowledge_graph
+from backend.ingestion.text_extractors import extract_text_by_type
 from backend.logging_config import logger
 
 
@@ -47,6 +48,11 @@ def process_document(doc_id: str, llm_client=None) -> dict:
             text = extract_native_text(file_path)
         except Exception:
             text = detection.get("text_sample", "")
+        if not text:
+            try:
+                text = extract_text_by_type(file_path, file_type)
+            except Exception:
+                text = ""
         steps["ocr"] = "native_extraction"
 
     text = (text or "").strip()

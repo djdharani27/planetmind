@@ -6,17 +6,21 @@ export default function UploadPage() {
   const [files, setFiles] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [documents, setDocuments] = useState([]);
+  const [page, setPage] = useState(1);
+  const [totalDocs, setTotalDocs] = useState(0);
   const [status, setStatus] = useState(null);
+  const limit = 10;
   const inputRef = useRef(null);
 
   const fetchDocs = useCallback(async () => {
     try {
-      const data = await apiFetch("/documents");
+      const data = await apiFetch(`/documents?page=${page}&limit=${limit}`);
       setDocuments(data.documents || []);
+      setTotalDocs(data.total || 0);
     } catch {
       setDocuments([]);
     }
-  }, []);
+  }, [page]);
 
   useEffect(() => {
     fetchDocs();
@@ -143,23 +147,44 @@ export default function UploadPage() {
         {documents.length === 0 ? (
           <p className="text-gray-500">No documents yet.</p>
         ) : (
-          <div className="space-y-3">
-            {documents.map((doc) => (
-              <div key={doc.id} className="bg-gray-900 rounded-xl p-4 flex justify-between items-center">
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{doc.filename}</p>
-                  <div className="flex gap-3 text-xs text-gray-400 mt-1">
-                    <span>{doc.file_type?.split("/")[1]?.toUpperCase() || doc.file_type}</span>
-                    <span>{formatSize(doc.file_size)}</span>
-                    <span>{new Date(doc.upload_timestamp).toLocaleDateString()}</span>
+          <>
+            <div className="space-y-3">
+              {documents.map((doc) => (
+                <div key={doc.id} className="bg-gray-900 rounded-xl p-4 flex justify-between items-center">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium truncate">{doc.filename}</p>
+                    <div className="flex gap-3 text-xs text-gray-400 mt-1">
+                      <span>{doc.file_type?.split("/")[1]?.toUpperCase() || doc.file_type}</span>
+                      <span>{formatSize(doc.file_size)}</span>
+                      <span>{new Date(doc.upload_timestamp).toLocaleDateString()}</span>
+                    </div>
                   </div>
+                  <span className={`text-xs px-2 py-1 rounded-full ${statusColors[doc.processing_status] || "bg-gray-600"}`}>
+                    {doc.processing_status}
+                  </span>
                 </div>
-                <span className={`text-xs px-2 py-1 rounded-full ${statusColors[doc.processing_status] || "bg-gray-600"}`}>
-                  {doc.processing_status}
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+            <div className="flex justify-center items-center gap-4 mt-4">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page <= 1}
+                className="text-sm text-gray-400 hover:text-white disabled:opacity-30"
+              >
+                ← Prev
+              </button>
+              <span className="text-sm text-gray-500">
+                Page {page} of {Math.ceil(totalDocs / limit) || 1}
+              </span>
+              <button
+                onClick={() => setPage((p) => p + 1)}
+                disabled={page * limit >= totalDocs}
+                className="text-sm text-gray-400 hover:text-white disabled:opacity-30"
+              >
+                Next →
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>

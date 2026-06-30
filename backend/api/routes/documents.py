@@ -1,4 +1,4 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from backend.api import document_service as svc
 from backend.models.document import (
     DocumentResponse,
@@ -51,9 +51,17 @@ async def upload_document(file: UploadFile = File(...)):
 
 
 @router.get("", response_model=DocumentListResponse)
-async def list_documents():
+async def list_documents(page: int = Query(1, ge=1), limit: int = Query(20, ge=1, le=100)):
     docs = svc.list_documents()
-    return {"total": len(docs), "documents": [DocumentResponse(**d) for d in docs]}
+    total = len(docs)
+    start = (page - 1) * limit
+    paged = docs[start:start + limit]
+    return {
+        "total": total,
+        "page": page,
+        "limit": limit,
+        "documents": [DocumentResponse(**d) for d in paged],
+    }
 
 
 @router.get("/{doc_id}", response_model=DocumentResponse)

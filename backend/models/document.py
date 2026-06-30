@@ -39,6 +39,8 @@ class UploadResponse(BaseModel):
 
 class DocumentListResponse(BaseModel):
     total: int
+    page: int = 1
+    limit: int = 20
     documents: list[DocumentResponse]
 
 

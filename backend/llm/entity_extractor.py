@@ -74,7 +74,7 @@ def _llm_extract(client, text: str) -> list[dict]:
         text = text[:8000] + "..."
     prompt = EXTRACTION_PROMPT.format(types=", ".join(ENTITY_TYPES), text=text)
     response = client.chat.completions.create(
-        model="gpt-4o-mini",
+        model=settings.llm_model,
         messages=[{"role": "user", "content": prompt}],
         response_format={"type": "json_object"},
         temperature=0.1,

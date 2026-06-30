@@ -1,7 +1,17 @@
 from fastapi import APIRouter, HTTPException
+from backend.config import settings
 from backend.logging_config import logger
 
 router = APIRouter(prefix="/api/graph", tags=["graph"])
+
+
+def _get_neo4j_connection():
+    from neo4j import GraphDatabase
+    return GraphDatabase.driver(
+        settings.neo4j_uri,
+        auth=(settings.neo4j_user, settings.neo4j_password),
+        connection_timeout=5,
+    )
 
 
 @router.get("/{doc_id}")
@@ -9,7 +19,7 @@ async def get_document_graph(doc_id: str):
     """Return Neo4j nodes and relationships for a document."""
     try:
         from neo4j import GraphDatabase
-        driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "password"))
+        driver = _get_neo4j_connection()
         with driver.session() as session:
             result = session.run(
                 """MATCH (d:Document {id: $doc_id})-[r:MENTIONS]->(n)
@@ -73,7 +83,7 @@ async def graph_overview():
     """Return all graph nodes and relationships."""
     try:
         from neo4j import GraphDatabase
-        driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "password"))
+        driver = _get_neo4j_connection()
         with driver.session() as session:
             result = session.run(
                 """MATCH (n)-[r]->(m)

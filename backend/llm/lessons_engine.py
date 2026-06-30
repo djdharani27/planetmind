@@ -11,11 +11,18 @@ Capabilities:
 """
 import json
 from datetime import datetime, timezone
+from backend.config import settings
 from backend.search.hybrid_search import hybrid_search
 from backend.llm.chat_assistant import build_context
 from backend.logging_config import logger
 
-LESSONS_SYSTEM_PROMPT = """You are a Lessons Learned & Failure Intelligence agent for industrial operations.
+
+def _load_lessons_prompt() -> str:
+    prompt_path = settings.prompts_dir / "lessons_prompt.txt"
+    if prompt_path.exists():
+        return prompt_path.read_text(encoding="utf-8")
+    logger.warning(f"Lessons prompt file not found at {prompt_path}")
+    return """You are a Lessons Learned & Failure Intelligence agent for industrial operations.
 
 Your job:
 1. Analyze incident reports, near-misses, and audit findings
@@ -25,17 +32,20 @@ Your job:
 5. Create a lessons-learned knowledge base entry
 
 Output JSON:
-{
-    "identified_patterns": [{"pattern": "...", "occurrences": 3, "first_seen": "...", "last_seen": "..."}],
-    "systemic_risks": [{"risk": "...", "affected_equipment": ["..."], "probability": "high|medium|low", "impact": "critical|high|medium|low"}],
-    "proactive_warnings": [{"warning": "...", "target_team": "...", "urgency": "immediate|soon|informational"}],
-    "cross_references": [{"incident": "...", "related_incidents": ["..."], "similarity_reason": "..."}],
-    "lessons_learned": [{"lesson": "...", "source_incident": "...", "applicable_equipment": ["..."], "actionable": true}],
+{{
+    "identified_patterns": [{{"pattern": "...", "occurrences": 3, "first_seen": "...", "last_seen": "..."}}],
+    "systemic_risks": [{{"risk": "...", "affected_equipment": ["..."], "probability": "high|medium|low", "impact": "critical|high|medium|low"}}],
+    "proactive_warnings": [{{"warning": "...", "target_team": "...", "urgency": "immediate|soon|informational"}}],
+    "cross_references": [{{"incident": "...", "related_incidents": ["..."], "similarity_reason": "..."}}],
+    "lessons_learned": [{{"lesson": "...", "source_incident": "...", "applicable_equipment": ["..."], "actionable": true}}],
     "overall_risk_score": 0.0
-}
+}}
 
 Context:
 {context}"""
+
+
+LESSONS_SYSTEM_PROMPT = _load_lessons_prompt()
 
 
 def analyze_lessons(query: str, top_k: int = 15, llm_client=None) -> dict:
@@ -51,7 +61,7 @@ def analyze_lessons(query: str, top_k: int = 15, llm_client=None) -> dict:
         try:
             prompt = LESSONS_SYSTEM_PROMPT.format(context=context)
             response = llm_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=settings.llm_model,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 temperature=0.2,

@@ -11,11 +11,18 @@ Connects dots across documents that individual team members cannot see alone.
 """
 import json
 from datetime import datetime, timezone
+from backend.config import settings
 from backend.search.hybrid_search import hybrid_search
 from backend.llm.chat_assistant import build_context
 from backend.logging_config import logger
 
-RCA_SYSTEM_PROMPT = """You are a Root Cause Analysis (RCA) and Maintenance Intelligence agent for industrial operations.
+
+def _load_rca_prompt() -> str:
+    prompt_path = settings.prompts_dir / "rca_prompt.txt"
+    if prompt_path.exists():
+        return prompt_path.read_text(encoding="utf-8")
+    logger.warning(f"RCA prompt file not found at {prompt_path}")
+    return """You are a Root Cause Analysis (RCA) and Maintenance Intelligence agent for industrial operations.
 
 Your job:
 1. Analyze equipment failure patterns from work orders, inspection reports, and OEM manuals
@@ -25,17 +32,20 @@ Your job:
 5. Provide confidence scores for each recommendation
 
 Output JSON format:
-{
+{{
     "equipment_analyzed": ["Equip-1", "Equip-2"],
-    "root_causes": [{"cause": "...", "evidence": "...", "confidence": 0.0}],
-    "predictive_recommendations": [{"action": "...", "interval_days": 30, "justification": "..."}],
-    "failure_patterns": [{"pattern": "...", "frequency": "weekly", "severity": "high"}],
-    "optimized_schedule": {"task": "...", "current_interval": 90, "recommended_interval": 45, "reason": "..."},
+    "root_causes": [{{"cause": "...", "evidence": "...", "confidence": 0.0}}],
+    "predictive_recommendations": [{{"action": "...", "interval_days": 30, "justification": "..."}}],
+    "failure_patterns": [{{"pattern": "...", "frequency": "weekly", "severity": "high"}}],
+    "optimized_schedule": {{"task": "...", "current_interval": 90, "recommended_interval": 45, "reason": "..."}},
     "overall_confidence": 0.0
-}
+}}
 
 Context from documents:
 {context}"""
+
+
+RCA_SYSTEM_PROMPT = _load_rca_prompt()
 
 
 def analyze_maintenance(query: str, top_k: int = 15, llm_client=None) -> dict:
@@ -51,7 +61,7 @@ def analyze_maintenance(query: str, top_k: int = 15, llm_client=None) -> dict:
         try:
             prompt = RCA_SYSTEM_PROMPT.format(context=context)
             response = llm_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=settings.llm_model,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 temperature=0.2,

@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
 from backend.ingestion.pipeline import process_document
 from backend.ingestion.pipeline_async import process_document_async
-from backend.ingestion.jobs import get_job, get_all_jobs
+from backend.ingestion.jobs import get_job_sync, get_all_jobs_sync
 from backend.logging_config import logger
 
 router = APIRouter(prefix="/api/pipeline", tags=["pipeline"])
@@ -37,13 +37,13 @@ async def process_async(request: ProcessRequest):
 
 
 @router.get("/job/{job_id}")
-async def job_status(job_id: str):
-    job = await get_job(job_id)
+def job_status(job_id: str):
+    job = get_job_sync(job_id)
     if not job:
         raise HTTPException(404, "Job not found")
     return job
 
 
 @router.get("/jobs")
-async def all_jobs():
-    return await get_all_jobs()
+def all_jobs():
+    return get_all_jobs_sync()

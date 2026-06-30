@@ -12,8 +12,8 @@ def build_knowledge_graph(doc_id: str, entities: list[dict]) -> dict:
         logger.warning("Neo4j driver not installed; skipping graph construction")
         return {"nodes": 0, "relationships": 0}
 
-    uri = "bolt://localhost:7687"
-    driver = GraphDatabase.driver(uri, auth=("neo4j", "password"))
+    uri = settings.neo4j_uri
+    driver = GraphDatabase.driver(uri, auth=(settings.neo4j_user, settings.neo4j_password), connection_timeout=5)
 
     nodes_created = 0
     rels_created = 0

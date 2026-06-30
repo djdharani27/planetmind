@@ -60,10 +60,12 @@ export default function UploadPage() {
       }
     }
 
-    setStatus(`${ok} uploaded, ${fail} failed`);
+    setStatus(`${ok} uploaded, ${fail} failed — processing started`);
     setFiles([]);
     setUploading(false);
     fetchDocs();
+    setTimeout(fetchDocs, 3000);
+    setTimeout(fetchDocs, 8000);
   };
 
   const formatSize = (bytes) => {

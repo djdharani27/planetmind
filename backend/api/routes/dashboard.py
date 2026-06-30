@@ -1,8 +1,21 @@
 from fastapi import APIRouter
+from backend.config import settings
 from backend.database.database import get_connection
 from backend.logging_config import logger
 
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
+
+
+def _get_neo4j_connection():
+    try:
+        from neo4j import GraphDatabase
+        return GraphDatabase.driver(
+            settings.neo4j_uri,
+            auth=(settings.neo4j_user, settings.neo4j_password),
+            connection_timeout=3,
+        )
+    except ImportError:
+        return None
 
 
 @router.get("")
@@ -20,21 +33,21 @@ async def dashboard():
     graph_nodes = 0
     graph_rels = 0
     try:
-        from neo4j import GraphDatabase
-        driver = GraphDatabase.driver("bolt://localhost:7687", auth=("neo4j", "password"))
-        with driver.session() as session:
-            nodes_result = session.run("MATCH (n) RETURN count(n) AS cnt").single()
-            rels_result = session.run("MATCH ()-[r]->() RETURN count(r) AS cnt").single()
-            graph_nodes = nodes_result["cnt"] if nodes_result else 0
-            graph_rels = rels_result["cnt"] if rels_result else 0
-        driver.close()
+        driver = _get_neo4j_connection()
+        if driver:
+            with driver.session() as session:
+                nodes_result = session.run("MATCH (n) RETURN count(n) AS cnt").single()
+                rels_result = session.run("MATCH ()-[r]->() RETURN count(r) AS cnt").single()
+                graph_nodes = nodes_result["cnt"] if nodes_result else 0
+                graph_rels = rels_result["cnt"] if rels_result else 0
+            driver.close()
     except Exception:
         pass
 
     vector_count = 0
     try:
         from qdrant_client import QdrantClient
-        qdrant = QdrantClient(host="localhost", port=6333)
+        qdrant = QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port, timeout=3)
         info = qdrant.get_collection("planetmind_chunks")
         vector_count = info.points_count if info else 0
     except Exception:

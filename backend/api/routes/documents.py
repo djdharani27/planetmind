@@ -4,10 +4,33 @@ from backend.models.document import (
     DocumentResponse,
     UploadResponse,
     DocumentListResponse,
-    ErrorResponse,
 )
+from backend.logging_config import logger
+import subprocess
+import sys
+import threading
+from pathlib import Path
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
+
+_script_path = Path(__file__).resolve().parent.parent.parent.parent / "process_docs.py"
+
+
+def _process_in_thread(doc_id: str):
+    try:
+        logger.info(f"Background processing started for {doc_id}")
+        result = subprocess.run(
+            [sys.executable, str(_script_path), doc_id],
+            capture_output=True, text=True, timeout=120,
+            cwd=str(_script_path.parent),
+        )
+        logger.info(f"Processing output for {doc_id}: {result.stdout.strip()}")
+        if result.stderr:
+            logger.warning(f"Processing stderr for {doc_id}: {result.stderr.strip()}")
+    except subprocess.TimeoutExpired:
+        logger.error(f"Processing timed out for {doc_id}")
+    except Exception as e:
+        logger.error(f"Background processing failed for {doc_id}: {e}")
 
 
 @router.post("/upload", response_model=UploadResponse)
@@ -17,10 +40,11 @@ async def upload_document(file: UploadFile = File(...)):
     try:
         content = await file.read()
         doc = svc.save_upload(content, file.filename, file.content_type)
+        threading.Thread(target=_process_in_thread, args=(doc["id"],), daemon=True).start()
         return {
             "status": "success",
             "document": DocumentResponse(**doc),
-            "message": f"Uploaded {file.filename}",
+            "message": f"Uploaded {file.filename} — processing in background",
         }
     except ValueError as e:
         raise HTTPException(400, str(e))

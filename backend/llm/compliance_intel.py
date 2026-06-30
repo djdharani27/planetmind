@@ -11,11 +11,18 @@ Capabilities:
 """
 import json
 from datetime import datetime, timezone
+from backend.config import settings
 from backend.search.hybrid_search import hybrid_search
 from backend.llm.chat_assistant import build_context
 from backend.logging_config import logger
 
-COMPLIANCE_SYSTEM_PROMPT = """You are a Quality & Regulatory Compliance Intelligence agent for industrial operations.
+
+def _load_compliance_prompt() -> str:
+    prompt_path = settings.prompts_dir / "compliance_prompt.txt"
+    if prompt_path.exists():
+        return prompt_path.read_text(encoding="utf-8")
+    logger.warning(f"Compliance prompt file not found at {prompt_path}")
+    return """You are a Quality & Regulatory Compliance Intelligence agent for industrial operations.
 
 Applicable regulations: Factory Act, OISD, PESO, ISO 9001, ISO 14001, ISO 45001, environmental norms.
 
@@ -27,17 +34,20 @@ Your job:
 5. Suggest corrective actions with priority
 
 Output JSON:
-{
+{{
     "applicable_regulations": ["Factory Act", "OISD", "ISO 9001"],
-    "compliance_gaps": [{"requirement": "...", "gap": "...", "severity": "critical|high|medium|low", "risk": "..."}],
-    "evidence_package": [{"document": "...", "clause": "...", "status": "compliant|partial|noncompliant"}],
-    "quality_deviations": [{"deviation": "...", "impact": "...", "detected_in": "..."}],
-    "corrective_actions": [{"action": "...", "priority": 1, "deadline_days": 30}],
+    "compliance_gaps": [{{"requirement": "...", "gap": "...", "severity": "critical|high|medium|low", "risk": "..."}}],
+    "evidence_package": [{{"document": "...", "clause": "...", "status": "compliant|partial|noncompliant"}}],
+    "quality_deviations": [{{"deviation": "...", "impact": "...", "detected_in": "..."}}],
+    "corrective_actions": [{{"action": "...", "priority": 1, "deadline_days": 30}}],
     "overall_compliance_score": 0.0
-}
+}}
 
 Context:
 {context}"""
+
+
+COMPLIANCE_SYSTEM_PROMPT = _load_compliance_prompt()
 
 
 def analyze_compliance(query: str, top_k: int = 15, llm_client=None) -> dict:
@@ -53,7 +63,7 @@ def analyze_compliance(query: str, top_k: int = 15, llm_client=None) -> dict:
         try:
             prompt = COMPLIANCE_SYSTEM_PROMPT.format(context=context)
             response = llm_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=settings.llm_model,
                 messages=[{"role": "user", "content": prompt}],
                 response_format={"type": "json_object"},
                 temperature=0.1,

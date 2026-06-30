@@ -1,7 +1,14 @@
 from datetime import datetime, timezone
+from backend.config import settings
 from backend.logging_config import logger
 
-CHAT_SYSTEM_PROMPT = """You are an industrial AI copilot for PlanetMind AI. You answer operational, maintenance, 
+
+def _load_chat_prompt() -> str:
+    prompt_path = settings.prompts_dir / "chat_prompt.txt"
+    if prompt_path.exists():
+        return prompt_path.read_text(encoding="utf-8")
+    logger.warning(f"Chat prompt file not found at {prompt_path}, using inline fallback")
+    return """You are an industrial AI copilot for PlanetMind AI. You answer operational, maintenance,
 and engineering questions using retrieved document context.
 
 Rules:
@@ -15,6 +22,9 @@ Context:
 {context}
 
 Question: {question}"""
+
+
+CHAT_SYSTEM_PROMPT = _load_chat_prompt()
 
 
 def build_context(search_results: list[dict]) -> str:
@@ -38,7 +48,7 @@ def generate_answer(question: str, search_results: list[dict], llm_client=None) 
     if llm_client:
         try:
             response = llm_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=settings.llm_model,
                 messages=[{"role": "user", "content": prompt}],
                 temperature=0.3,
                 max_tokens=1000,

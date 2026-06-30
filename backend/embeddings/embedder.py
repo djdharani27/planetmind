@@ -18,7 +18,7 @@ def generate_and_store_embeddings(doc_id: str, chunks: list[dict]) -> int:
     model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
 
     try:
-        qdrant = QdrantClient(host="localhost", port=6333)
+        qdrant = QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port, timeout=5)
     except Exception as e:
         logger.warning(f"Qdrant connection failed for {doc_id}: {e}")
         return 0

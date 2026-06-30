@@ -5,25 +5,31 @@ const FILTERS = [
   { key: "equipment", label: "Equipment" },
   { key: "date_from", label: "From Date" },
   { key: "date_to", label: "To Date" },
-  { key: "type", label: "Document Type" },
+  { key: "document_type", label: "Doc Type" },
   { key: "technician", label: "Technician" },
-  { key: "failure", label: "Failure Type" },
+  { key: "failure_type", label: "Failure" },
 ];
 
 export default function SearchPage() {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [filters, setFilters] = useState({});
   const navigate = useNavigate();
+
+  const updateFilter = (key, value) => {
+    setFilters((prev) => ({ ...prev, [key]: value || undefined }));
+  };
 
   const search = async () => {
     if (!query.trim()) return;
     setLoading(true);
     try {
+      const body = { query, top_k: 15, ...Object.fromEntries(Object.entries(filters).filter(([, v]) => v)) };
       const res = await fetch("/api/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query, top_k: 15 }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
       setResults(data);
@@ -61,12 +67,19 @@ export default function SearchPage() {
           <div key={f.key} className="flex items-center gap-1.5 bg-gray-900 border border-gray-700 rounded-lg px-3 py-1.5 text-xs">
             <span className="text-gray-400">{f.label}</span>
             {f.key.startsWith("date") ? (
-              <input type="date" className="bg-transparent text-white text-xs focus:outline-none" />
+              <input
+                type="date"
+                value={filters[f.key] || ""}
+                onChange={(e) => updateFilter(f.key, e.target.value)}
+                className="bg-transparent text-white text-xs focus:outline-none"
+              />
             ) : (
               <input
                 type="text"
                 placeholder="any"
-                className="bg-transparent text-white text-xs w-20 focus:outline-none"
+                value={filters[f.key] || ""}
+                onChange={(e) => updateFilter(f.key, e.target.value)}
+                className="bg-transparent text-white text-xs w-24 focus:outline-none"
               />
             )}
           </div>

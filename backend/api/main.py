@@ -1,6 +1,7 @@
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from backend.config import settings
 from backend.logging_config import logger
 from backend.database.database import init_db
@@ -12,6 +13,7 @@ from backend.api.routes.dashboard import router as dashboard_router
 from backend.api.routes.maintenance import router as maintenance_router
 from backend.api.routes.compliance import router as compliance_router
 from backend.api.routes.lessons import router as lessons_router
+from backend.api.routes.graph_api import router as graph_router
 
 
 @asynccontextmanager
@@ -40,6 +42,10 @@ app.include_router(dashboard_router)
 app.include_router(maintenance_router)
 app.include_router(compliance_router)
 app.include_router(lessons_router)
+app.include_router(graph_router)
+
+settings.processed_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/storage/processed", StaticFiles(directory=str(settings.processed_dir)), name="processed")
 
 
 @app.get("/health")

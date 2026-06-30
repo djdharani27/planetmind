@@ -52,17 +52,23 @@ def build_knowledge_graph(doc_id: str, entities: list[dict]) -> dict:
 
 
 def _build_equipment_relationships(session, entities: list[dict], doc_id: str):
-    """Link equipment to failures and activities."""
+    """Link equipment to failures, activities, and locations."""
     equipment = [e["value"] for e in entities if e["type"] == "equipment"]
     failures = [e["value"] for e in entities if e["type"] == "failure"]
     activities = [e["value"] for e in entities if e["type"] == "maintenance_activity"]
     technicians = [e["value"] for e in entities if e["type"] == "technician"]
+    locations = [e["value"] for e in entities if e["type"] == "location"]
 
     for eq in equipment:
         for fail in failures:
             session.run(
                 "MATCH (e:Equipment {value: $eq}) MATCH (f:Failure {value: $fail}) MERGE (e)-[:HAS_FAILURE]->(f)",
                 eq=eq, fail=fail,
+            )
+        for loc in locations:
+            session.run(
+                "MATCH (e:Equipment {value: $eq}) MATCH (l:Location {value: $loc}) MERGE (e)-[:LOCATED_AT]->(l)",
+                eq=eq, loc=loc,
             )
 
     for fail in failures:

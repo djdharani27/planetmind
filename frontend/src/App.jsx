@@ -8,12 +8,14 @@ import DocViewer from "./pages/DocViewer";
 import MaintenancePage from "./pages/MaintenancePage";
 import CompliancePage from "./pages/CompliancePage";
 import LessonsPage from "./pages/LessonsPage";
+import GraphPage from "./pages/GraphPage";
 
 const nav = [
   { to: "/", label: "Dashboard" },
   { to: "/upload", label: "Upload" },
   { to: "/search", label: "Search" },
   { to: "/chat", label: "Chat" },
+  { to: "/graph", label: "Graph" },
   { to: "/maintenance", label: "Maintenance" },
   { to: "/compliance", label: "Compliance" },
   { to: "/lessons", label: "Lessons" },
@@ -59,6 +61,7 @@ export default function App() {
           <Route path="/maintenance" element={<MaintenancePage />} />
           <Route path="/compliance" element={<CompliancePage />} />
           <Route path="/lessons" element={<LessonsPage />} />
+          <Route path="/graph" element={<GraphPage />} />
           <Route path="/documents/:id" element={<DocViewer />} />
         </Routes>
       </div>

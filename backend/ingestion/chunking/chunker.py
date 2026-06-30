@@ -1,5 +1,6 @@
 import json
-import uuid
+import json
+import re
 from pathlib import Path
 from datetime import datetime, timezone
 from backend.config import settings
@@ -38,7 +39,7 @@ def chunk_document(doc_id: str, parsed: dict, text: str) -> list[dict]:
             "token_count": node.metadata.get("tokens", 0),
             "previous_chunk_id": f"{doc_id}_c{idx - 1}" if idx > 0 else None,
             "next_chunk_id": f"{doc_id}_c{idx + 1}" if idx < len(nodes) - 1 else None,
-            "equipment_tags": [],
+            "equipment_tags": _extract_equipment_tags(text),
             "created_at": datetime.now(timezone.utc).isoformat(),
         }
         chunks.append(chunk)
@@ -60,3 +61,9 @@ def chunk_document(doc_id: str, parsed: dict, text: str) -> list[dict]:
 
     logger.info(f"Chunking complete for {doc_id}: {len(chunks)} chunks")
     return chunks
+
+
+def _extract_equipment_tags(text: str) -> list[str]:
+    equipment_re = re.compile(r"\b(Pump|Turbine|Motor|Generator|Compressor|Valve|Transformer|Gearbox)\s+[A-Z]{1,3}[-]\d{2,5}\b", re.IGNORECASE)
+    return list(set(equipment_re.findall(text)))[:10]
+

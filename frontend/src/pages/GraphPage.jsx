@@ -4,15 +4,27 @@ import "vis-network/styles/vis-network.css";
 import { apiFetch } from "../lib/api";
 
 const GROUP_COLORS = {
-  equipment:        { border: "#3b82f6", background: "#1e3a5f", highlight: { background: "#2563eb", border: "#60a5fa" } },
-  component:        { border: "#06b6d4", background: "#164e63", highlight: { background: "#0891b2", border: "#22d3ee" } },
-  failure:          { border: "#ef4444", background: "#5f1a1a", highlight: { background: "#dc2626", border: "#f87171" } },
-  maintenanceactivity: { border: "#f59e0b", background: "#5c3d0a", highlight: { background: "#d97706", border: "#fbbf24" } },
-  technician:       { border: "#10b981", background: "#064e3b", highlight: { background: "#059669", border: "#34d399" } },
-  regulation:       { border: "#a855f7", background: "#3b1a6e", highlight: { background: "#9333ea", border: "#c084fc" } },
-  document:         { border: "#6b7280", background: "#1f2937", highlight: { background: "#4b5563", border: "#9ca3af" } },
-  location:         { border: "#eab308", background: "#5c4a0a", highlight: { background: "#ca8a04", border: "#fef08a" } },
-  processparameter: { border: "#ec4899", background: "#5c1442", highlight: { background: "#db2777", border: "#f472b6" } },
+  equipment:        { border: "#60a5fa", background: "#1e40af", highlight: { background: "#2563eb", border: "#93c5fd" } },
+  component:        { border: "#2dd4bf", background: "#115e59", highlight: { background: "#0d9488", border: "#5eead4" } },
+  failure:          { border: "#f87171", background: "#991b1b", highlight: { background: "#dc2626", border: "#fca5a5" } },
+  maintenanceactivity: { border: "#fbbf24", background: "#92400e", highlight: { background: "#d97706", border: "#fde68a" } },
+  technician:       { border: "#34d399", background: "#065f46", highlight: { background: "#059669", border: "#6ee7b7" } },
+  regulation:       { border: "#c084fc", background: "#581c87", highlight: { background: "#9333ea", border: "#d8b4fe" } },
+  document:         { border: "#94a3b8", background: "#334155", highlight: { background: "#475569", border: "#cbd5e1" } },
+  location:         { border: "#fde047", background: "#854d0e", highlight: { background: "#ca8a04", border: "#fef08a" } },
+  processparameter: { border: "#f472b6", background: "#831843", highlight: { background: "#db2777", border: "#f9a8d4" } },
+};
+
+const SHAPES = {
+  equipment: "diamond",
+  component: "hexagon",
+  failure: "triangle",
+  maintenanceactivity: "square",
+  technician: "dot",
+  regulation: "star",
+  document: "box",
+  location: "ellipse",
+  processparameter: "dot",
 };
 
 function computeDegrees(edges) {
@@ -68,20 +80,23 @@ export default function GraphPage() {
     const graphNodes = new vis.DataSet(
       nodes.map((n) => {
         const deg = degrees[n.id] || 1;
-        const size = 14 + (deg / maxDeg) * 36;
+        const size = 16 + (deg / maxDeg) * 34;
+        const group = n.group || "Unknown";
         return {
           id: n.id,
-          label: n.label?.length > 18 ? n.label.slice(0, 16) + "…" : n.label,
-          group: n.group || "Unknown",
-          title: `<div style="font-size:13px;line-height:1.5">
-            <b>${n.type || n.group}</b><br/>
-            ${n.label}<br/>
+          label: n.label?.length > 14 ? n.label.slice(0, 12) + "…" : n.label,
+          group,
+          shape: SHAPES[group] || "dot",
+          title: `<div style="font-size:13px;line-height:1.6;padding:4px">
+            <b style="color:${GROUP_COLORS[group]?.border || '#94a3b8'}">${n.type || group}</b><br/>
+            <span style="font-size:14px">${n.label}</span><br/>
             <span style="color:#9ca3af;font-size:11px">${deg} connection${deg !== 1 ? "s" : ""}</span>
           </div>`,
           value: deg,
           size,
-          borderWidth: 2,
-          borderWidthSelected: 3,
+          borderWidth: deg > maxDeg * 0.5 ? 3 : 2,
+          borderWidthSelected: 4,
+          mass: 1 + (deg / maxDeg) * 2,
         };
       })
     );
@@ -110,26 +125,29 @@ export default function GraphPage() {
 
     const options = {
       nodes: {
-        shape: "dot",
         font: {
-          size: 11,
-          color: "#d1d5db",
+          size: 10,
+          color: "#e2e8f0",
           face: "Inter, system-ui, sans-serif",
-          strokeWidth: 2,
-          strokeColor: "#111827",
+          strokeWidth: 3,
+          strokeColor: "#0f172a",
         },
         shadow: {
           enabled: true,
-          color: "rgba(0,0,0,0.4)",
-          size: 6,
+          color: "rgba(0,0,0,0.5)",
+          size: 8,
           x: 0,
-          y: 2,
+          y: 3,
         },
+        borderWidth: 2,
+        borderWidthSelected: 4,
         scaling: {
-          min: 14,
+          min: 16,
           max: 50,
-          label: { enabled: true, min: 9, max: 14 },
+          label: { enabled: true, min: 8, max: 13 },
         },
+        mass: 1.5,
+        shapeProperties: { useBorderWithImage: true },
       },
       edges: {
         width: 1,
@@ -144,20 +162,20 @@ export default function GraphPage() {
         enabled: physicsOn,
         solver: "forceAtlas2Based",
         forceAtlas2Based: {
-          gravitationalConstant: -28,
-          centralGravity: 0.003,
-          springLength: 180,
-          springConstant: 0.04,
-          damping: 0.4,
-          avoidOverlap: 0.6,
+          gravitationalConstant: -60,
+          centralGravity: 0.001,
+          springLength: 250,
+          springConstant: 0.02,
+          damping: 0.5,
+          avoidOverlap: 0.8,
         },
         stabilization: {
-          iterations: 300,
-          updateInterval: 25,
+          iterations: 400,
+          updateInterval: 30,
           onlyDynamicEdges: false,
           fit: true,
         },
-        timestep: 0.35,
+        timestep: 0.4,
         adaptiveTimestep: true,
       },
       interaction: {

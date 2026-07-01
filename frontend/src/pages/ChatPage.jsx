@@ -34,15 +34,15 @@ function Markdown({ text }) {
 
 /* ──────── Inline Knowledge Graph ──────── */
 const GROUP_COLORS = {
-  equipment: { border: "#3b82f6", background: "#dbeafe", highlight: "#3b82f6" },
-  component: { border: "#06b6d4", background: "#cffafe", highlight: "#06b6d4" },
-  failure: { border: "#ef4444", background: "#fee2e2", highlight: "#ef4444" },
-  maintenanceactivity: { border: "#f59e0b", background: "#fef3c7", highlight: "#f59e0b" },
-  technician: { border: "#10b981", background: "#d1fae5", highlight: "#10b981" },
-  regulation: { border: "#a855f7", background: "#f3e8ff", highlight: "#a855f7" },
-  document: { border: "#6b7280", background: "#f3f4f6", highlight: "#6b7280" },
-  location: { border: "#ecc94b", background: "#fef9c3", highlight: "#ecc94b" },
-  processparameter: { border: "#ec4899", background: "#fce7f3", highlight: "#ec4899" },
+  equipment: { border: "#60a5fa", background: "#dbeafe", highlight: "#60a5fa" },
+  component: { border: "#2dd4bf", background: "#ccfbf1", highlight: "#2dd4bf" },
+  failure: { border: "#f87171", background: "#fee2e2", highlight: "#f87171" },
+  maintenanceactivity: { border: "#fbbf24", background: "#fef3c7", highlight: "#fbbf24" },
+  technician: { border: "#34d399", background: "#d1fae5", highlight: "#34d399" },
+  regulation: { border: "#c084fc", background: "#f3e8ff", highlight: "#c084fc" },
+  document: { border: "#94a3b8", background: "#f1f5f9", highlight: "#94a3b8" },
+  location: { border: "#fde047", background: "#fef9c3", highlight: "#fde047" },
+  processparameter: { border: "#f472b6", background: "#fce7f3", highlight: "#f472b6" },
   Unknown: { border: "#94a3b8", background: "#f1f5f9", highlight: "#94a3b8" },
 };
 
@@ -90,12 +90,14 @@ function InlineGraph({ nodes: rawNodes, edges: rawEdges }) {
       physics: {
         solver: "forceAtlas2Based",
         forceAtlas2Based: {
-          gravitationalConstant: -30,
-          centralGravity: 0.005,
-          springLength: 100,
-          springConstant: 0.06,
+          gravitationalConstant: -50,
+          centralGravity: 0.002,
+          springLength: 150,
+          springConstant: 0.03,
+          damping: 0.4,
+          avoidOverlap: 0.7,
         },
-        stabilization: { iterations: 100 },
+        stabilization: { iterations: 150 },
       },
       interaction: {
         hover: true,

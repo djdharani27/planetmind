@@ -72,6 +72,9 @@ def analyze_lessons(query: str, top_k: int = 15, llm_client=None) -> dict:
                 max_tokens=1500,
             )
             analysis = json.loads(response.choices[0].message.content)
+            if not isinstance(analysis, dict):
+                logger.warning(f"Lessons LLM returned non-dict JSON: {type(analysis).__name__}")
+                analysis = _fallback_lessons(query, search_results)
         except Exception as e:
             logger.error(f"Lessons LLM call failed: {e}")
             analysis = _fallback_lessons(query, search_results)

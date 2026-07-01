@@ -125,7 +125,7 @@ async def run_react_agent(
                     else:
                         try:
                             args = json.loads(tc.function.arguments)
-                            output = tool.run(**args)
+                            output = await tool.run(**args)
 
                             # Track sources
                             if hasattr(output, "results"):

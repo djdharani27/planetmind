@@ -74,6 +74,9 @@ def analyze_compliance(query: str, top_k: int = 15, llm_client=None) -> dict:
                 max_tokens=1500,
             )
             analysis = json.loads(response.choices[0].message.content)
+            if not isinstance(analysis, dict):
+                logger.warning(f"Compliance LLM returned non-dict JSON: {type(analysis).__name__}")
+                analysis = _fallback_compliance(query, search_results)
         except Exception as e:
             logger.error(f"Compliance LLM call failed: {e}")
             analysis = _fallback_compliance(query, search_results)

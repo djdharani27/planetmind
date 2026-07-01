@@ -6,6 +6,7 @@ backend agent: chat, search, maintenance, compliance, lessons, or knowledge grap
 """
 
 import json
+import random
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -43,7 +44,7 @@ def detect_intent(query: str) -> str:
         return "chat"
     words = q_clean.split()
     if q_clean in greeting_phrases or (words and words[0] in greeting_words and len(words) <= 3):
-        return "chat"
+        return "greeting"
 
     # Maintenance / RCA
     if any(kw in q for kw in [
@@ -174,6 +175,23 @@ async def agent_query(request: AgentRequest):
 
     try:
         # 2. Route to the right tool
+        if intent == "greeting":
+            greetings = [
+                "Hello! I'm Kumar. Got questions about your equipment, maintenance history, or compliance status? I've been in this industry long enough — ask me anything.",
+                "Hey there, Kumar here. What can I dig into for you? Failures, documents, compliance — just point me where to look.",
+                "Kumar here. I've got your documents loaded and ready. What do you need to know about your operations today?",
+                "You've got Kumar on the job. Tell me what you're looking for — I'll find it in the data.",
+                "Welcome. I've been working industrial intelligence for decades. What's the question?",
+            ]
+            return {
+                "answer": random.choice(greetings),
+                "intent": "chat",
+                "tools_used": [],
+                "sources": [],
+                "confidence": 100,
+                "answered_at": datetime.now(timezone.utc).isoformat(),
+            }
+
         if intent == "graph":
             graph_data = await graph_overview()
             if graph_data.get("warning"):

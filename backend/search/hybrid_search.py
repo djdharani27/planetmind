@@ -1,11 +1,40 @@
+"""Hybrid search — BM25 + Vector (BGE-M3 → Qdrant) + Graph (Neo4j).
+
+Models are cached at module level so they load once, not per-query.
+"""
+
 from datetime import datetime, timezone
 from pathlib import Path
 import json
 from backend.config import settings
 from backend.logging_config import logger
 
+# ── Module-level model caches (loaded once, reused across queries) ──
+_bge_model = None
+_reranker = None
 
-def hybrid_search(query: str, top_k: int = 10) -> dict:
+
+def _get_bge_model():
+    global _bge_model
+    if _bge_model is None:
+        from FlagEmbedding import BGEM3FlagModel
+        logger.info("Loading BGE-M3 model (first call — caching)...")
+        _bge_model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
+        logger.info("BGE-M3 model loaded")
+    return _bge_model
+
+
+def _get_reranker():
+    global _reranker
+    if _reranker is None:
+        from FlagEmbedding import FlagReranker
+        logger.info("Loading BGE reranker (first call — caching)...")
+        _reranker = FlagReranker("BAAI/bge-reranker-v2-m3", use_fp16=True)
+        logger.info("BGE reranker loaded")
+    return _reranker
+
+
+def hybrid_search(query: str, top_k: int = 8) -> dict:
     bm25_results = _bm25_search(query, top_k)
     vector_results = _vector_search(query, top_k)
     graph_results = _graph_search(query, top_k)
@@ -24,6 +53,27 @@ def hybrid_search(query: str, top_k: int = 10) -> dict:
         "searched_at": datetime.now(timezone.utc).isoformat(),
     }
 
+
+def quick_search(query: str, top_k: int = 5) -> dict:
+    """Lightweight search — vector only, no BM25, no reranking. For chat speed."""
+    vector_results = _vector_search(query, top_k)
+    graph_results = _graph_search(query, top_k)
+    all_results = vector_results + graph_results
+    all_results.sort(key=lambda x: x.get("rerank_score", x.get("score", 0)), reverse=True)
+
+    return {
+        "query": query,
+        "results": all_results[:top_k],
+        "source_breakdown": {
+            "bm25": 0,
+            "vector": len(vector_results),
+            "graph": len(graph_results),
+        },
+        "searched_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+# ── BM25 ──
 
 def _bm25_search(query: str, top_k: int) -> list[dict]:
     try:
@@ -74,6 +124,8 @@ def _bm25_search(query: str, top_k: int) -> list[dict]:
         return []
 
 
+# ── Merge & Rerank ──
+
 def _merge_and_rerank(query: str, results: list[dict], top_k: int) -> list[dict]:
     seen_ids = set()
     deduplicated = []
@@ -82,43 +134,20 @@ def _merge_and_rerank(query: str, results: list[dict], top_k: int) -> list[dict]
             seen_ids.add(r["document_id"])
             deduplicated.append(r)
 
-    reranked = _rerank_with_bge(query, deduplicated)
-    return reranked[:top_k]
+    # Score-based ordering (skip expensive BGE reranker for speed)
+    for c in deduplicated:
+        c["rerank_score"] = c.get("rerank_score", c.get("score", 0))
+    deduplicated.sort(key=lambda x: x["rerank_score"], reverse=True)
+    return deduplicated[:top_k]
 
 
-def _rerank_with_bge(query: str, candidates: list[dict]) -> list[dict]:
-    if not candidates:
-        return candidates
-
-    try:
-        from FlagEmbedding import FlagReranker
-        reranker = FlagReranker("BAAI/bge-reranker-v2-m3", use_fp16=True)
-
-        pairs = [[query, c.get("snippet", "")] for c in candidates]
-        scores = reranker.compute_score(pairs, normalize=True)
-
-        if not isinstance(scores, list):
-            scores = [scores]
-
-        for i, c in enumerate(candidates):
-            c["rerank_score"] = float(scores[i]) if i < len(scores) else c["score"]
-
-        candidates.sort(key=lambda x: x["rerank_score"], reverse=True)
-        return candidates
-    except Exception as e:
-        logger.info(f"BGE reranker unavailable ({e}), falling back to score-based ordering")
-        for c in candidates:
-            c["rerank_score"] = c.get("score", 0)
-        candidates.sort(key=lambda x: x["rerank_score"], reverse=True)
-        return candidates
-
+# ── Vector Search (BGE-M3 → Qdrant) ──
 
 def _vector_search(query: str, top_k: int) -> list[dict]:
     try:
-        from FlagEmbedding import BGEM3FlagModel
         from qdrant_client import QdrantClient
 
-        model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
+        model = _get_bge_model()
         qdrant = QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port, timeout=5)
 
         query_embedding = model.encode([query], batch_size=1)
@@ -147,6 +176,8 @@ def _vector_search(query: str, top_k: int) -> list[dict]:
         logger.info(f"Vector search unavailable: {e}")
         return []
 
+
+# ── Graph Search (Neo4j) ──
 
 def _graph_search(query: str, top_k: int) -> list[dict]:
     try:

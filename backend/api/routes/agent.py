@@ -9,7 +9,7 @@ import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
-from backend.search.hybrid_search import hybrid_search
+from backend.search.hybrid_search import hybrid_search, quick_search
 from backend.llm.chat_assistant import generate_answer
 from backend.llm.maintenance_rca import analyze_maintenance
 from backend.llm.compliance_intel import analyze_compliance
@@ -245,7 +245,12 @@ async def agent_query(request: AgentRequest):
             }
 
         # Search, Chat, Maintenance, Compliance, Lessons — all need search results
-        search_results = hybrid_search(query, request.top_k)["results"]
+        # Use quick_search for chat (faster: vector + graph, no BM25, no reranking)
+        if intent == "chat":
+            search_data = quick_search(query, top_k=5)
+        else:
+            search_data = hybrid_search(query, top_k=request.top_k)
+        search_results = search_data["results"]
 
         if intent == "search":
             formatted = []
@@ -320,6 +325,57 @@ async def agent_query(request: AgentRequest):
 
         # Default: general chat / Q&A
         answer = generate_answer(query, search_results)
+
+        # Include knowledge graph data when entity matches are found in search
+        graph_data = None
+        graph_entities = [r for r in search_results if r.get("entity") or r.get("entity_type")]
+        entity_values = list(set(
+            r.get("entity", "") for r in graph_entities if r.get("entity")
+        ))
+        if entity_values:
+            try:
+                from neo4j import GraphDatabase
+                driver = GraphDatabase.driver(
+                    settings.neo4j_uri,
+                    auth=(settings.neo4j_user, settings.neo4j_password),
+                    connection_timeout=3,
+                )
+                with driver.session() as session:
+                    result = session.run(
+                        """MATCH (e)
+                           WHERE e.value IN $entities
+                           OPTIONAL MATCH (e)-[r]-(related)
+                           RETURN e.value AS from_val,
+                                  labels(e)[0] AS from_type,
+                                  related.value AS to_val,
+                                  labels(related)[0] AS to_type,
+                                  type(r) AS rel_type
+                           LIMIT 100""",
+                        entities=entity_values[:20],
+                    )
+                    records = list(result)
+                driver.close()
+
+                nodes_map = {}
+                edges_list = []
+                for rec in records:
+                    for val, typ in [(rec["from_val"], rec["from_type"]), (rec["to_val"], rec["to_type"])]:
+                        if val and val not in nodes_map:
+                            g = (typ or "unknown").lower()
+                            nodes_map[val] = {"id": f"{g}_{val}", "label": val, "group": g, "type": typ or "Unknown"}
+                    if rec["from_val"] and rec["to_val"]:
+                        f_type = (rec["from_type"] or "unknown").lower()
+                        t_type = (rec["to_type"] or "unknown").lower()
+                        edges_list.append({
+                            "from": f"{f_type}_{rec['from_val']}",
+                            "to": f"{t_type}_{rec['to_val']}",
+                            "label": rec["rel_type"],
+                        })
+                if nodes_map:
+                    graph_data = {"nodes": list(nodes_map.values()), "edges": edges_list}
+            except Exception:
+                pass
+
         return {
             "answer": answer.get("answer", "I couldn't find an answer to that question."),
             "intent": "chat",
@@ -327,6 +383,7 @@ async def agent_query(request: AgentRequest):
             "sources": answer.get("sources", []),
             "confidence": answer.get("confidence", 50),
             "related": answer.get("related", {}),
+            "graph_data": graph_data,
             "answered_at": answer.get("answered_at", datetime.now(timezone.utc).isoformat()),
         }
 

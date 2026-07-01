@@ -337,7 +337,7 @@ export default function ChatPage() {
             </div>
             <div>
               <h1 className="text-xl font-bold text-[#0F172A]">Kumar</h1>
-              <p className="text-sm text-[#64748B]">Intelligence for Industries</p>
+              <p className="text-sm text-[#64748B]">Veteran · Industrial Intelligence</p>
             </div>
           </div>
 
@@ -382,9 +382,9 @@ export default function ChatPage() {
                 What do you need to know?
               </h2>
               <p className="text-sm text-[#64748B] max-w-md mb-6">
-                I'm Kumar, your industrial intelligence agent. Ask me anything about
-                equipment, failures, compliance, documents, or operations — I'll pull
-                insights from all available data sources.
+                I'm Kumar — a veteran in industrial intelligence. I only speak from the
+                documents: no guesswork, no filler, just what the data says. Ask me about
+                equipment, failures, maintenance, compliance, or operations.
               </p>
               <div className="grid grid-cols-2 gap-2 max-w-md w-full">
                 {activeSuggestions.map((s) => (
@@ -427,7 +427,7 @@ export default function ChatPage() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && sendQuery()}
-            placeholder="Ask Kumar anything..."
+            placeholder="Ask Kumar — what do the documents say?"
             className="flex-1 bg-white border border-[#E2E8F0] rounded-xl px-4 py-3 text-sm text-[#0F172A] placeholder-[#94A3B8] focus:outline-none focus:ring-2 focus:ring-[#2563EB]/30 focus:border-[#2563EB] transition-all"
             disabled={loading}
           />

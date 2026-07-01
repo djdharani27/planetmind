@@ -33,7 +33,7 @@ def detect_intent(query: str) -> str:
     q = query.lower().strip()
 
     # Casual greetings & small talk — respond naturally, no search needed
-    greeting_words = {"hi", "hello", "hey", "hai", "howdy", "sup", "yo", "namaste"}
+    greeting_words = {"hi", "hello", "hey", "hai", "howdy", "sup", "yo", "namaste", "kumar"}
     greeting_phrases = {
         "good morning", "good afternoon", "good evening", "what's up", "wassup",
         "how are you", "how are you doing", "how's it going", "nice to meet you",
@@ -44,6 +44,17 @@ def detect_intent(query: str) -> str:
         return "chat"
     words = q_clean.split()
     if q_clean in greeting_phrases or (words and words[0] in greeting_words and len(words) <= 3):
+        return "greeting"
+    # Single-word non-keyword queries (names, casual mentions) → greeting
+    if len(words) == 1 and not any(kw in q for kw in [
+        "root cause", "rca", "failure", "fail", "breakdown", "repair", "fix",
+        "maintenance", "predictive", "schedule", "inspection", "bearing",
+        "lubrication", "vibration", "overheat", "fatigue", "corrosion",
+        "worn", "crack", "misalignment", "wear", "compliance", "regulation",
+        "regulatory", "audit", "iso", "lesson", "incident", "near miss",
+        "warning", "risk", "learned", "accident", "graph", "knowledge graph",
+        "process", "pipeline", "embedding", "find", "search", "look up",
+    ]):
         return "greeting"
 
     # Maintenance / RCA
@@ -185,7 +196,7 @@ async def agent_query(request: AgentRequest):
             ]
             return {
                 "answer": random.choice(greetings),
-                "intent": "chat",
+                "intent": "greeting",
                 "tools_used": [],
                 "sources": [],
                 "confidence": 100,

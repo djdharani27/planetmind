@@ -163,21 +163,6 @@ function SourceBadges({ sources }) {
   );
 }
 
-/* ──────── Confidence badge ──────── */
-function ConfidenceBadge({ value }) {
-  const color =
-    value >= 80 ? "#10b981" : value >= 50 ? "#f59e0b" : "#ef4444";
-  return (
-    <span
-      className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full border"
-      style={{ color, borderColor: color, backgroundColor: color + "15" }}
-    >
-      <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: color }} />
-      {value}% confidence
-    </span>
-  );
-}
-
 /* ──────── Typing dots ──────── */
 function TypingDots() {
   return (
@@ -377,7 +362,7 @@ export default function ChatPage() {
 
 /* ──────── Message Bubble ──────── */
 function MessageBubble({ message }) {
-  const { role, content, intent, confidence, sources, graphData } = message;
+  const { role, content, intent, sources, graphData } = message;
 
   if (role === "user") {
     return (
@@ -405,9 +390,6 @@ function MessageBubble({ message }) {
               <span className="text-[10px] bg-[#EFF6FF] text-[#2563EB] px-1.5 py-0.5 rounded-full border border-[#BFDBFE] capitalize">
                 {intent}
               </span>
-            )}
-            {confidence != null && confidence > 0 && (
-              <ConfidenceBadge value={confidence} />
             )}
           </div>
 

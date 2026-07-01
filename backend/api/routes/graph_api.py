@@ -104,13 +104,23 @@ def _build_graph_data(doc_filter: str | None = None) -> dict:
             group = ENTITY_TYPE_GROUPS.get(etype, etype)
             enid = f"{group}_{evalue}"
 
+            ctx = ent.get("context", "").strip()
+            conf = ent.get("confidence")
+
             if enid not in nodes_map:
                 nodes_map[enid] = {
                     "id": enid,
                     "label": evalue,
                     "group": group,
                     "type": etype.title(),
+                    "context": ctx,
+                    "confidence": conf,
                 }
+            else:
+                # Merge context if this doc has a different one
+                existing_ctx = nodes_map[enid].get("context", "")
+                if ctx and ctx != existing_ctx:
+                    nodes_map[enid]["context"] = existing_ctx + " | " + ctx if existing_ctx else ctx
 
             if enid not in seen_in_doc:
                 seen_in_doc.add(enid)

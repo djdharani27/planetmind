@@ -221,7 +221,7 @@ export default function GraphPage() {
 
     net.on("selectNode", (p) => {
       const node = nodes.find((n) => n.id === p.nodes[0]);
-      if (node) setSelected({ ...node, degree: deg[node.id] || 0 });
+      if (node) setSelected({ ...node, degree: deg[node.id] || 0, context: node.context, confidence: node.confidence });
     });
     net.on("deselectNode", () => setSelected(null));
     net.on("hoverNode", () => { document.body.style.cursor = "pointer"; });
@@ -303,38 +303,110 @@ export default function GraphPage() {
 
       {/* Detail panel */}
       {selected && selected.id && (
-        <div className="absolute top-16 right-4 w-72 bg-gray-900/95 border border-gray-700 rounded-xl p-5 shadow-xl backdrop-blur-sm max-h-[70vh] overflow-y-auto pointer-events-auto z-10">
+        <div className="absolute top-16 right-4 w-80 bg-gray-900/95 border border-gray-700 rounded-xl p-5 shadow-xl backdrop-blur-sm max-h-[75vh] overflow-y-auto pointer-events-auto z-10">
           <button
             onClick={() => { networkRef.current?.unselectAll(); setSelected(null); }}
             className="absolute top-2.5 right-2.5 text-gray-500 hover:text-white text-sm w-6 h-6 flex items-center justify-center rounded hover:bg-gray-800 transition-colors"
           >✕</button>
 
-          <div className="flex items-center gap-2 mb-3">
-            <span
-              className="w-3 h-3 rounded-full border shrink-0"
-              style={{ backgroundColor: (GROUP_DEFS[selected.group] || GROUP_DEFS.document).color.background, borderColor: (GROUP_DEFS[selected.group] || GROUP_DEFS.document).color.border }}
-            />
-            <span className="text-xs text-gray-500 uppercase tracking-wider">{GROUP_LABELS[selected.group] || selected.group}</span>
-          </div>
+          {/* Header badge */}
+          {(() => {
+            const def = GROUP_DEFS[selected.group] || GROUP_DEFS.document;
+            const gname = GROUP_LABELS[selected.group] || selected.group;
+            return (
+              <div className="flex items-center gap-2 mb-3">
+                <span className="w-3 h-3 rounded-full border shrink-0"
+                  style={{ backgroundColor: def.color.background, borderColor: def.color.border }} />
+                <span className="text-xs text-gray-500 uppercase tracking-wider">{gname}</span>
+                {selected.confidence != null && (
+                  <span className="text-[10px] text-gray-600 ml-auto">{Math.round(selected.confidence * 100)}% confidence</span>
+                )}
+              </div>
+            );
+          })()}
 
           <h3 className="font-bold text-base text-white mb-3 break-words leading-snug">{selected.label}</h3>
 
-          <div className="space-y-2.5 text-xs border-t border-gray-700 pt-3">
-            <div>
-              <span className="text-gray-500 text-[10px] uppercase tracking-wider">Type</span>
-              <p className="text-gray-300 mt-0.5">{selected.type}</p>
+          {/* Context text from the document */}
+          {selected.context && (
+            <div className="bg-gray-800/50 border border-gray-700 rounded-lg px-3 py-2.5 mb-3">
+              <span className="text-[10px] uppercase tracking-wider text-gray-500">Document context</span>
+              <p className="text-gray-300 text-xs mt-1 leading-relaxed italic">{selected.context}</p>
             </div>
+          )}
+
+          <div className="space-y-3 text-xs border-t border-gray-700 pt-3">
+            {/* Source document */}
+            {(() => {
+              const docEdges = edges.filter(e => e.from.startsWith("Document_") && e.to === selected.id);
+              const srcDocIds = [...new Set(docEdges.map(e => e.from))];
+              if (!srcDocIds.length) return null;
+              return (
+                <div>
+                  <span className="text-gray-500 text-[10px] uppercase tracking-wider">Source document{srcDocIds.length > 1 ? "s" : ""}</span>
+                  {srcDocIds.map(did => {
+                    const dn = nodes.find(n => n.id === did);
+                    return dn ? (
+                      <p key={did} className="text-gray-300 mt-0.5 truncate">{dn.label}</p>
+                    ) : null;
+                  })}
+                </div>
+              );
+            })()}
+
+            {/* Connected neighbors */}
+            {(() => {
+              const neighborIds = new Set();
+              for (const e of edges) {
+                if (e.from === selected.id) neighborIds.add(e.to);
+                if (e.to === selected.id) neighborIds.add(e.from);
+              }
+              neighborIds.delete(selected.id);
+
+              const neighbors = [...neighborIds]
+                .map(nid => nodes.find(n => n.id === nid))
+                .filter(Boolean)
+                .slice(0, 12);
+
+              if (!neighbors.length) return null;
+
+              // Group by type
+              const grouped = {};
+              for (const n of neighbors) {
+                const g = n.group || "other";
+                if (!grouped[g]) grouped[g] = [];
+                grouped[g].push(n);
+              }
+
+              return (
+                <div>
+                  <span className="text-gray-500 text-[10px] uppercase tracking-wider">
+                    Connected ({neighbors.length}{neighborIds.size > 12 ? "+" : ""})
+                  </span>
+                  <div className="space-y-1 mt-1">
+                    {Object.entries(grouped).map(([gkey, ns]) => {
+                      const def = GROUP_DEFS[gkey] || GROUP_DEFS.document;
+                      return (
+                        <div key={gkey}>
+                          <div className="flex items-center gap-1.5 mb-0.5">
+                            <span className="w-1.5 h-1.5 rounded-full shrink-0"
+                              style={{ backgroundColor: def.color.background, borderColor: def.color.border }} />
+                            <span className="text-[10px] text-gray-600">{GROUP_LABELS[gkey] || gkey}</span>
+                          </div>
+                          {ns.map(nw => (
+                            <p key={nw.id} className="text-gray-400 text-xs ml-3 truncate">{nw.label}</p>
+                          ))}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
+
             <div>
-              <span className="text-gray-500 text-[10px] uppercase tracking-wider">Group</span>
-              <p className="text-gray-300 mt-0.5">{GROUP_LABELS[selected.group] || selected.group}</p>
-            </div>
-            <div>
-              <span className="text-gray-500 text-[10px] uppercase tracking-wider">Connections</span>
-              <p className="text-gray-300 mt-0.5">{selected.degree}</p>
-            </div>
-            <div>
-              <span className="text-gray-500 text-[10px] uppercase tracking-wider">ID</span>
-              <p className="font-mono text-[11px] text-gray-400 mt-0.5 break-all">{selected.id}</p>
+              <span className="text-gray-500 text-[10px] uppercase tracking-wider">Value</span>
+              <p className="font-mono text-[11px] text-gray-400 mt-0.5 break-all">{selected.label}</p>
             </div>
           </div>
         </div>

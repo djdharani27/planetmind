@@ -112,7 +112,7 @@ def process_document(doc_id: str, llm_client=None) -> dict:
     if entities:
         try:
             from backend.graph.graph_builder import build_knowledge_graph
-            build_knowledge_graph(doc_id, entities)
+            build_knowledge_graph(doc_id, entities, filename=doc.get("filename", ""))
             steps["graph"] = "completed"
         except Exception:
             logger.info(f"Graph skipped for {doc_id} — Neo4j not available")

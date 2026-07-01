@@ -65,9 +65,17 @@ async def get_document_graph(doc_id: str):
                 rel_type = rec["rel_type"] or "RELATED_TO"
                 edges.append({"from": nid, "to": rid, "label": rel_type})
 
+        doc_label = doc_id[:8]
+        try:
+            from backend.api import document_service as svc
+            d = svc.get_document(doc_id)
+            if d:
+                doc_label = d.get("filename", doc_id[:8])
+        except Exception:
+            pass
         nodes[f"Document_{doc_id}"] = {
             "id": f"Document_{doc_id}",
-            "label": doc_id[:8],
+            "label": doc_label,
             "group": "document",
             "type": "Document",
         }
@@ -88,9 +96,9 @@ async def graph_overview():
             result = session.run(
                 """MATCH (n)-[r]->(m)
                    RETURN labels(n) as from_labels,
-                          COALESCE(n.value, n.id, n.filename) as from_val,
+                          COALESCE(n.filename, n.value, left(n.id, 8)) as from_val,
                           labels(m) as to_labels,
-                          COALESCE(m.value, m.id, m.filename) as to_val,
+                          COALESCE(m.filename, m.value, left(m.id, 8)) as to_val,
                           type(r) as rel_type
                    LIMIT 1000"""
             )

@@ -4,7 +4,7 @@ from backend.database.database import get_connection
 from backend.logging_config import logger
 
 
-def build_knowledge_graph(doc_id: str, entities: list[dict]) -> dict:
+def build_knowledge_graph(doc_id: str, entities: list[dict], filename: str = "") -> dict:
     """Build knowledge graph in Neo4j from extracted entities."""
     try:
         from neo4j import GraphDatabase
@@ -19,7 +19,7 @@ def build_knowledge_graph(doc_id: str, entities: list[dict]) -> dict:
     rels_created = 0
 
     with driver.session() as session:
-        session.run("MERGE (d:Document {id: $id, filename: ''})", id=doc_id)
+        session.run("MERGE (d:Document {id: $id, filename: $filename})", id=doc_id, filename=filename or doc_id[:8])
 
         for entity in entities:
             entity_type = entity.get("type", "unknown")

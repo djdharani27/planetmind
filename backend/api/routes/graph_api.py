@@ -87,12 +87,12 @@ async def graph_overview():
         with driver.session() as session:
             result = session.run(
                 """MATCH (n)-[r]->(m)
-                   WHERE NOT n:Document AND NOT m:Document
-                   OPTIONAL MATCH (d:Document)-[:MENTIONS]->(n)
-                   RETURN labels(n) as from_labels, n.value as from_val,
-                          labels(m) as to_labels, m.value as to_val,
-                          type(r) as rel_type, collect(d.id) as documents
-                   LIMIT 100"""
+                   RETURN labels(n) as from_labels,
+                          COALESCE(n.value, n.id, n.filename) as from_val,
+                          labels(m) as to_labels,
+                          COALESCE(m.value, m.id, m.filename) as to_val,
+                          type(r) as rel_type
+                   LIMIT 1000"""
             )
             records = list(result)
         driver.close()
@@ -117,7 +117,6 @@ async def graph_overview():
                 "from": fid,
                 "to": tid,
                 "label": rec["rel_type"],
-                "documents": rec["documents"],
             })
 
         return {"nodes": list(nodes.values()), "edges": edges}

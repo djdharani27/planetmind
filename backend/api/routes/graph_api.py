@@ -96,9 +96,9 @@ async def graph_overview():
             result = session.run(
                 """MATCH (n)-[r]->(m)
                    RETURN labels(n) as from_labels,
-                          COALESCE(n.filename, n.value, left(n.id, 8)) as from_val,
+                          COALESCE(nullif(n.filename, ''), n.value, left(toString(n.id), 8)) as from_val,
                           labels(m) as to_labels,
-                          COALESCE(m.filename, m.value, left(m.id, 8)) as to_val,
+                          COALESCE(nullif(m.filename, ''), m.value, left(toString(m.id), 8)) as to_val,
                           type(r) as rel_type
                    LIMIT 1000"""
             )
@@ -127,14 +127,18 @@ async def graph_overview():
                 "label": rec["rel_type"],
             })
 
+        filtered = [n for n in nodes.values() if n.get("label")]
+        valid_ids = {n["id"] for n in filtered}
         seen = set()
         deduped = []
         for e in edges:
+            if e["from"] not in valid_ids or e["to"] not in valid_ids:
+                continue
             key = f"{e['from']}|{e['to']}|{e['label']}"
             if key not in seen:
                 seen.add(key)
                 deduped.append(e)
-        return {"nodes": [n for n in nodes.values() if n.get("label")], "edges": deduped}
+        return {"nodes": filtered, "edges": deduped}
     except Exception as e:
         logger.warning(f"Graph overview failed: {e}")
         return {"nodes": [], "edges": [], "warning": "Neo4j unavailable"}

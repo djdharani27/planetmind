@@ -95,8 +95,9 @@ export default function GraphPage() {
     const vEdges = new vis.DataSet(edges.map((e, i) => ({
       id: e.id || `e${i}`,
       from: e.from, to: e.to,
-      arrows: { to: { enabled: true, scaleFactor: 0.4 } },
-      color: { color: "#64748b", highlight: "#818cf8", hover: "#818cf8" },
+      label: e.label,
+      arrows: { to: { enabled: true, scaleFactor: 0.6 } },
+      color: { color: "#cbd5e1", highlight: "#a5b4fc", hover: "#a5b4fc" },
       smooth: { type: "continuous", roundness: 0.15 },
       width: 1.5,
     })));
@@ -109,7 +110,7 @@ export default function GraphPage() {
         scaling: { min: 16, max: 50, label: { enabled: true, min: 8, max: 13 } },
       },
       edges: {
-        width: 1.5, color: { color: "#475569", highlight: "#818cf8", hover: "#818cf8" },
+        width: 1.5, color: { color: "#cbd5e1", highlight: "#a5b4fc", hover: "#a5b4fc" },
         smooth: { type: "continuous", roundness: 0.15 },
       },
       groups: GROUP_COLORS,

@@ -29,7 +29,21 @@ class AgentRequest(BaseModel):
 
 
 def detect_intent(query: str) -> str:
-    q = query.lower()
+    q = query.lower().strip()
+
+    # Casual greetings & small talk — respond naturally, no search needed
+    greeting_words = {"hi", "hello", "hey", "hai", "howdy", "sup", "yo", "namaste"}
+    greeting_phrases = {
+        "good morning", "good afternoon", "good evening", "what's up", "wassup",
+        "how are you", "how are you doing", "how's it going", "nice to meet you",
+        "hey there", "hey hai", "hi there", "hello there", "hey hey",
+    }
+    q_clean = q.rstrip("?!.,;:")
+    if not q_clean:
+        return "chat"
+    words = q_clean.split()
+    if q_clean in greeting_phrases or (words and words[0] in greeting_words and len(words) <= 3):
+        return "greeting"
 
     # Maintenance / RCA
     if any(kw in q for kw in [
@@ -160,6 +174,16 @@ async def agent_query(request: AgentRequest):
 
     try:
         # 2. Route to the right tool
+        if intent == "greeting":
+            return {
+                "answer": "Hey there! I'm Kumar — I've got decades of industrial intelligence under my belt. Ask me about equipment, failures, maintenance, compliance, or anything in your documents. What can I help you with?",
+                "intent": "chat",
+                "tools_used": [],
+                "sources": [],
+                "confidence": 100,
+                "answered_at": datetime.now(timezone.utc).isoformat(),
+            }
+
         if intent == "graph":
             graph_data = await graph_overview()
             if graph_data.get("warning"):

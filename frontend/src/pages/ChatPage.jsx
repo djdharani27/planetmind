@@ -144,21 +144,31 @@ function InlineGraph({ nodes: rawNodes, edges: rawEdges }) {
   );
 }
 
-/* ──────── Source badges ──────── */
-function SourceBadges({ sources }) {
+/* ──────── Source button (collapsible) ──────── */
+function SourceButton({ sources }) {
+  const [open, setOpen] = useState(false);
   if (!sources?.length) return null;
   return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
-      {sources.slice(0, 5).map((s, i) => (
-        <span
-          key={i}
-          className="text-[11px] bg-[#F1F5F9] text-[#64748B] px-2 py-0.5 rounded-full border border-[#E2E8F0]"
-        >
-          {s.filename || s.document_id?.slice(0, 10) || "source"}
-          {s.page ? ` p.${s.page}` : ""}
-          {s.score != null && ` (${(s.score * 100).toFixed(0)}%)`}
-        </span>
-      ))}
+    <div className="mt-2">
+      <button
+        onClick={() => setOpen(!open)}
+        className="text-[11px] text-[#64748B] hover:text-[#2563EB] bg-[#F8FAFC] hover:bg-[#EFF6FF] border border-[#E2E8F0] rounded-lg px-2.5 py-1 transition-colors"
+      >
+        {open ? "Hide sources" : `${sources.length} source${sources.length > 1 ? "s" : ""}`}
+      </button>
+      {open && (
+        <div className="mt-1.5 flex flex-wrap gap-1.5">
+          {sources.slice(0, 8).map((s, i) => (
+            <span
+              key={i}
+              className="text-[11px] bg-[#F8FAFC] text-[#475569] px-2 py-0.5 rounded-md border border-[#E2E8F0]"
+            >
+              {s.filename || s.document_id?.slice(0, 10) || "doc"}
+              {s.page ? ` p.${s.page}` : ""}
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -580,18 +590,11 @@ function MessageBubble({ message }) {
       </div>
       <div className="flex-1 min-w-0">
         <div className="bg-white border border-[#E2E8F0] rounded-2xl rounded-tl-sm px-4 py-3 shadow-sm">
-          <div className="flex items-center gap-2 mb-1.5">
-            <span className="text-xs font-semibold text-[#2563EB]">Kumar</span>
-            {intent && intent !== "chat" && intent !== "error" && (
-              <span className="text-[10px] bg-[#EFF6FF] text-[#2563EB] px-1.5 py-0.5 rounded-full border border-[#BFDBFE] capitalize">
-                {intent}
-              </span>
-            )}
-          </div>
+          <span className="text-xs font-semibold text-[#2563EB] block mb-1.5">Kumar</span>
 
           <Markdown text={content} />
 
-          {sources?.length > 0 && <SourceBadges sources={sources} />}
+          <SourceButton sources={sources} />
         </div>
 
         {/* Inline knowledge graph */}

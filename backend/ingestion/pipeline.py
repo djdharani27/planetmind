@@ -108,15 +108,8 @@ def process_document(doc_id: str, llm_client=None) -> dict:
     steps["entities"] = "completed"
     _update_status(doc_id, "entities_complete")
 
-    # Step 6: Knowledge graph (optional — needs Neo4j)
-    if entities:
-        try:
-            from backend.graph.graph_builder import build_knowledge_graph
-            build_knowledge_graph(doc_id, entities, filename=doc.get("filename", ""))
-            steps["graph"] = "completed"
-        except Exception:
-            logger.info(f"Graph skipped for {doc_id} — Neo4j not available")
-            steps["graph"] = "skipped_no_service"
+    # Step 6: Graph — entities are already saved on disk for the graph API to read
+    steps["graph"] = "completed"
     _update_status(doc_id, "graph_complete")
 
     # Step 7: Save text and update metadata

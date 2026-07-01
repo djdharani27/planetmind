@@ -1,144 +1,179 @@
-from fastapi import APIRouter, HTTPException
+import json
+from pathlib import Path
+from collections import defaultdict
+from fastapi import APIRouter
 from backend.config import settings
+from backend.database.database import get_connection
 from backend.logging_config import logger
 
 router = APIRouter(prefix="/api/graph", tags=["graph"])
 
+# Entity types that become Neo4j-style labels for grouping
+ENTITY_TYPE_GROUPS = {
+    "equipment":           "equipment",
+    "component":           "component",
+    "failure":             "failure",
+    "maintenance_activity": "maintenanceactivity",
+    "technician":          "technician",
+    "regulation":          "regulation",
+    "document":            "document",
+    "location":            "location",
+    "process_parameter":   "processparameter",
+    "date":                "date",
+}
 
-def _get_neo4j_connection():
-    from neo4j import GraphDatabase
-    return GraphDatabase.driver(
-        settings.neo4j_uri,
-        auth=(settings.neo4j_user, settings.neo4j_password),
-        connection_timeout=5,
-    )
+RELATIONSHIP_RULES = [
+    ("equipment", "failure",          "HAS_FAILURE"),
+    ("equipment", "location",         "LOCATED_AT"),
+    ("failure",   "technician",       "FIXED_BY"),
+    ("equipment", "component",        "HAS_COMPONENT"),
+    ("equipment", "process_parameter", "HAS_PARAMETER"),
+    ("failure",   "maintenance_activity", "REQUIRES"),
+    ("component", "failure",          "CAUSES"),
+]
 
 
-@router.get("/{doc_id}")
-async def get_document_graph(doc_id: str):
-    """Return Neo4j nodes and relationships for a document."""
-    try:
-        from neo4j import GraphDatabase
-        driver = _get_neo4j_connection()
-        with driver.session() as session:
-            result = session.run(
-                """MATCH (d:Document {id: $doc_id})-[r:MENTIONS]->(n)
-                   OPTIONAL MATCH (n)-[rel]-(related)
-                   WHERE related:Document OR related:Equipment OR related:Failure OR related:Technician OR related:MaintenanceActivity OR related:Regulation
-                   RETURN n, r, related, type(rel) as rel_type, labels(n) as node_labels, labels(related) as related_labels""",
-                doc_id=doc_id,
-            )
-            records = list(result)
-        driver.close()
+def _load_all_entities() -> list[dict]:
+    """Read all processed entity files and attach their doc_id."""
+    proc_dir: Path = settings.processed_dir
+    if not proc_dir.exists():
+        return []
 
-        nodes = {}
-        edges = []
+    docs = {}
+    conn = get_connection()
+    rows = conn.execute("SELECT id, filename FROM documents").fetchall()
+    conn.close()
+    for r in rows:
+        docs[r["id"]] = r["filename"]
 
-        for rec in records:
-            entity = rec["n"]
-            node_labels = rec["node_labels"]
-            entity_type = node_labels[0] if node_labels else "Unknown"
+    results = []
+    for child in sorted(proc_dir.iterdir()):
+        if not child.is_dir():
+            continue
+        ep = child / "entities.json"
+        if not ep.exists():
+            continue
+        doc_id = child.name
+        filename = docs.get(doc_id, doc_id[:8])
+        try:
+            entities = json.loads(ep.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        if not isinstance(entities, list):
+            continue
+        results.append({"doc_id": doc_id, "filename": filename, "entities": entities})
+    return results
 
-            nid = f"{entity_type}_{entity['value']}"
-            if nid not in nodes:
-                nodes[nid] = {
-                    "id": nid,
-                    "label": entity["value"],
-                    "group": entity_type.lower(),
-                    "type": entity_type,
+
+def _build_graph_data(doc_filter: str | None = None) -> dict:
+    """Build nodes and edges from entity JSON files.
+
+    If *doc_filter* is set, only include entities from that document.
+    """
+    docs_data = _load_all_entities()
+    if doc_filter:
+        docs_data = [d for d in docs_data if d["doc_id"] == doc_filter]
+
+    nodes_map: dict[str, dict] = {}
+    edges: list[dict] = []
+    edge_set: set[str] = set()
+    doc_entity_map: dict[str, list[str]] = defaultdict(list)  # doc_id → [entity IDs]
+
+    for dd in docs_data:
+        doc_id = dd["doc_id"]
+        doc_nid = f"Document_{doc_id}"
+
+        # Document node
+        if doc_nid not in nodes_map:
+            nodes_map[doc_nid] = {
+                "id": doc_nid,
+                "label": dd["filename"],
+                "group": "document",
+                "type": "Document",
+            }
+
+        entities = dd["entities"]
+        seen_in_doc: set[str] = set()
+
+        for ent in entities:
+            etype = (ent.get("type") or "").strip().lower()
+            evalue = (ent.get("value") or "").strip()
+            if not etype or not evalue or len(evalue) < 2:
+                continue
+
+            group = ENTITY_TYPE_GROUPS.get(etype, etype)
+            enid = f"{group}_{evalue}"
+
+            if enid not in nodes_map:
+                nodes_map[enid] = {
+                    "id": enid,
+                    "label": evalue,
+                    "group": group,
+                    "type": etype.title(),
                 }
 
-            edges.append({"from": f"Document_{doc_id}", "to": nid, "label": "MENTIONS"})
+            if enid not in seen_in_doc:
+                seen_in_doc.add(enid)
+                doc_entity_map[doc_id].append(enid)
 
-            if rec["related"]:
-                rel_node = rec["related"]
-                rlabels = rec["related_labels"]
-                rtype = rlabels[0] if rlabels else "Unknown"
-                rid = f"{rtype}_{rel_node['value']}"
-                if rid not in nodes:
-                    nodes[rid] = {
-                        "id": rid,
-                        "label": rel_node["value"],
-                        "group": rtype.lower(),
-                        "type": rtype,
-                    }
-                rel_type = rec["rel_type"] or "RELATED_TO"
-                edges.append({"from": nid, "to": rid, "label": rel_type})
+                # Document → Entity edge
+                ek = f"{doc_nid}|{enid}|CONTAINS"
+                if ek not in edge_set:
+                    edge_set.add(ek)
+                    edges.append({
+                        "from": doc_nid,
+                        "to": enid,
+                        "label": "CONTAINS",
+                    })
 
-        doc_label = doc_id[:8]
-        try:
-            from backend.api import document_service as svc
-            d = svc.get_document(doc_id)
-            if d:
-                doc_label = d.get("filename", doc_id[:8])
-        except Exception:
-            pass
-        nodes[f"Document_{doc_id}"] = {
-            "id": f"Document_{doc_id}",
-            "label": doc_label,
-            "group": "document",
-            "type": "Document",
-        }
+        # Cross-entity relationships within this document
+        typed: dict[str, list[str]] = defaultdict(list)
+        for enid in seen_in_doc:
+            # Infer type from the prefix part of the id
+            for g in ENTITY_TYPE_GROUPS.values():
+                if enid.startswith(f"{g}_"):
+                    typed[g].append(enid)
+                    break
+            else:
+                typed["unknown"].append(enid)
 
-        return {"nodes": list(nodes.values()), "edges": edges, "document_id": doc_id}
-    except Exception as e:
-        logger.warning(f"Graph query failed (Neo4j may not be running): {e}")
-        return {"nodes": [], "edges": [], "document_id": doc_id, "warning": "Neo4j unavailable — graph data requires Neo4j service"}
+        for src_type, dst_type, rel_label in RELATIONSHIP_RULES:
+            for src in typed.get(src_type, []):
+                for dst in typed.get(dst_type, []):
+                    if src == dst:
+                        continue
+                    # Prefer linking from equipment-specific to its related entities
+                    ek = f"{src}|{dst}|{rel_label}"
+                    if ek not in edge_set:
+                        edge_set.add(ek)
+                        edges.append({
+                            "from": src,
+                            "to": dst,
+                            "label": rel_label,
+                        })
+
+    return {"nodes": list(nodes_map.values()), "edges": edges}
 
 
 @router.get("")
 async def graph_overview():
-    """Return all graph nodes and relationships."""
+    """Return all graph nodes and relationships from processed entities."""
     try:
-        from neo4j import GraphDatabase
-        driver = _get_neo4j_connection()
-        with driver.session() as session:
-            result = session.run(
-                """MATCH (n)-[r]->(m)
-                   RETURN labels(n) as from_labels,
-                          COALESCE(nullif(n.filename, ''), n.value, left(toString(n.id), 8)) as from_val,
-                          labels(m) as to_labels,
-                          COALESCE(nullif(m.filename, ''), m.value, left(toString(m.id), 8)) as to_val,
-                          type(r) as rel_type
-                   LIMIT 1000"""
-            )
-            records = list(result)
-        driver.close()
-
-        nodes = {}
-        edges = []
-        for i, rec in enumerate(records):
-            fl = rec["from_labels"][0] if rec["from_labels"] else "Unknown"
-            tl = rec["to_labels"][0] if rec["to_labels"] else "Unknown"
-            fv = rec["from_val"]
-            tv = rec["to_val"]
-
-            fid = f"{fl}_{fv}"
-            tid = f"{tl}_{tv}"
-            if fid not in nodes:
-                nodes[fid] = {"id": fid, "label": fv, "group": fl.lower(), "type": fl}
-            if tid not in nodes:
-                nodes[tid] = {"id": tid, "label": tv, "group": tl.lower(), "type": tl}
-
-            edges.append({
-                "id": f"e{i}",
-                "from": fid,
-                "to": tid,
-                "label": rec["rel_type"],
-            })
-
-        filtered = [n for n in nodes.values() if n.get("label")]
-        valid_ids = {n["id"] for n in filtered}
-        seen = set()
-        deduped = []
-        for e in edges:
-            if e["from"] not in valid_ids or e["to"] not in valid_ids:
-                continue
-            key = f"{e['from']}|{e['to']}|{e['label']}"
-            if key not in seen:
-                seen.add(key)
-                deduped.append(e)
-        return {"nodes": filtered, "edges": deduped}
+        data = _build_graph_data()
+        logger.info(f"Graph overview: {len(data['nodes'])} nodes, {len(data['edges'])} edges")
+        return data
     except Exception as e:
         logger.warning(f"Graph overview failed: {e}")
-        return {"nodes": [], "edges": [], "warning": "Neo4j unavailable"}
+        return {"nodes": [], "edges": [], "warning": "No graph data available"}
+
+
+@router.get("/{doc_id}")
+async def get_document_graph(doc_id: str):
+    """Return graph for a single document."""
+    try:
+        data = _build_graph_data(doc_filter=doc_id)
+        logger.info(f"Document graph {doc_id}: {len(data['nodes'])} nodes, {len(data['edges'])} edges")
+        return {**data, "document_id": doc_id}
+    except Exception as e:
+        logger.warning(f"Document graph failed for {doc_id}: {e}")
+        return {"nodes": [], "edges": [], "document_id": doc_id, "warning": "No graph data available"}

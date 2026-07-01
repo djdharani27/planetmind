@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
 
@@ -7,6 +7,7 @@ export default function AdminPage() {
   const [confirm, setConfirm] = useState(false);
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
+  const abortRef = useRef(null);
 
   if (user?.role !== "admin") {
     return (
@@ -19,14 +20,31 @@ export default function AdminPage() {
   const nuke = async () => {
     setLoading(true);
     setResult(null);
+    abortRef.current = new AbortController();
     try {
-      const data = await apiFetch("/admin/nuke", { method: "POST" });
+      const data = await apiFetch("/admin/nuke", {
+        method: "POST",
+        signal: abortRef.current.signal,
+      });
       setResult(data);
     } catch (e) {
-      setResult({ error: e.message });
+      if (e.name === "AbortError") {
+        setResult(null);
+      } else {
+        setResult({ error: e.message });
+      }
     }
+    abortRef.current = null;
     setLoading(false);
     setConfirm(false);
+  };
+
+  const cancel = () => {
+    if (abortRef.current) {
+      abortRef.current.abort();
+    } else {
+      setConfirm(false);
+    }
   };
 
   return (
@@ -43,7 +61,8 @@ export default function AdminPage() {
         {!confirm ? (
           <button
             onClick={() => setConfirm(true)}
-            className="bg-red-700 hover:bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium"
+            disabled={loading}
+            className="bg-red-700 hover:bg-red-600 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
           >
             Delete Everything
           </button>
@@ -54,31 +73,43 @@ export default function AdminPage() {
               <button
                 onClick={nuke}
                 disabled={loading}
-                className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium"
+                className="bg-red-600 hover:bg-red-500 disabled:opacity-50 text-white px-4 py-2 rounded-lg text-sm font-medium transition-colors"
               >
                 {loading ? "Nuking..." : "Yes, Delete Everything"}
               </button>
               <button
-                onClick={() => setConfirm(false)}
-                className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm"
+                onClick={cancel}
+                disabled={false}
+                className="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg text-sm transition-colors"
               >
-                Cancel
+                {loading ? "Aborting..." : "Cancel"}
               </button>
             </div>
+            {loading && (
+              <p className="text-xs text-gray-500">Deleting all data — this may take a moment. Click Cancel to abort.</p>
+            )}
           </div>
         )}
 
-        {result && (
+        {result && !result.cancelled && (
           <div className="mt-4 bg-gray-900 rounded-lg p-4 text-sm">
             {result.error ? (
               <p className="text-red-400">{result.error}</p>
             ) : (
               <div className="space-y-1">
                 <p className="text-green-400 font-medium">✓ Nuked successfully</p>
-                <p className="text-gray-400">Documents deleted: {result.details?.sqlite_documents}</p>
-                <p className="text-gray-400">Storage wiped: {result.details?.storage_deleted ? "Yes" : "No"}</p>
-                <p className="text-gray-400">Qdrant cleared: {result.details?.qdrant_cleared ? "Yes" : "No"}</p>
-                <p className="text-gray-400">Neo4j cleared: {result.details?.neo4j_cleared ? "Yes" : "No"}</p>
+                {result.details?.sqlite_documents !== undefined && (
+                  <p className="text-gray-400">Documents deleted: {result.details.sqlite_documents}</p>
+                )}
+                {result.details?.storage_deleted !== undefined && (
+                  <p className="text-gray-400">Storage wiped: {result.details.storage_deleted ? "Yes" : "No"}</p>
+                )}
+                {result.details?.qdrant_cleared !== undefined && (
+                  <p className="text-gray-400">Qdrant cleared: {result.details.qdrant_cleared ? "Yes" : "No"}</p>
+                )}
+                {result.details?.neo4j_cleared !== undefined && (
+                  <p className="text-gray-400">Neo4j cleared: {result.details.neo4j_cleared ? "Yes" : "No"}</p>
+                )}
               </div>
             )}
           </div>

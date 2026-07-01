@@ -5,32 +5,27 @@ from backend.models.document import (
     UploadResponse,
     DocumentListResponse,
 )
+from backend.ingestion.pipeline import process_document as full_pipeline
 from backend.logging_config import logger
-import subprocess
-import sys
 import threading
-from pathlib import Path
 
 router = APIRouter(prefix="/api/documents", tags=["documents"])
 
-_script_path = Path(__file__).resolve().parent.parent.parent.parent / "process_docs.py"
-
 
 def _process_in_thread(doc_id: str):
+    """Run full processing pipeline (OCR, chunking, embeddings, entities, graph) in background thread."""
     try:
-        logger.info(f"Background processing started for {doc_id}")
-        result = subprocess.run(
-            [sys.executable, str(_script_path), doc_id],
-            capture_output=True, text=True, timeout=120,
-            cwd=str(_script_path.parent),
+        logger.info(f"Background full pipeline started for {doc_id}")
+        result = full_pipeline(doc_id)
+        steps = result.get("steps", {})
+        logger.info(
+            f"Full pipeline complete for {doc_id}: "
+            f"ocr={steps.get('ocr','?')}, parse={steps.get('parse','?')}, "
+            f"embed={steps.get('embed','?')}, entities={steps.get('entities','?')}, "
+            f"graph={steps.get('graph','?')}"
         )
-        logger.info(f"Processing output for {doc_id}: {result.stdout.strip()}")
-        if result.stderr:
-            logger.warning(f"Processing stderr for {doc_id}: {result.stderr.strip()}")
-    except subprocess.TimeoutExpired:
-        logger.error(f"Processing timed out for {doc_id}")
     except Exception as e:
-        logger.error(f"Background processing failed for {doc_id}: {e}")
+        logger.error(f"Background full pipeline failed for {doc_id}: {e}")
 
 
 @router.post("/upload", response_model=UploadResponse)

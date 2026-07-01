@@ -136,7 +136,7 @@ export default function GraphPage() {
         </div>
         <div className="flex gap-2">
           <button
-            onClick={() => loadGraph("/api/graph")}
+            onClick={() => loadGraph("/graph")}
             className="bg-gray-800 hover:bg-gray-700 px-4 py-2 rounded-lg text-sm"
           >
             Full Graph

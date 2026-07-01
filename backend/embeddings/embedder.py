@@ -8,17 +8,18 @@ from backend.logging_config import logger
 def generate_and_store_embeddings(doc_id: str, chunks: list[dict]) -> int:
     """Generate embeddings using BGE-M3 and store in Qdrant."""
     try:
-        from FlagEmbedding import BGEM3FlagModel
         from qdrant_client import QdrantClient
         from qdrant_client.models import Distance, VectorParams, PointStruct
     except ImportError:
         logger.warning("Embedding dependencies not installed; skipping embedding generation")
         return 0
 
-    model = BGEM3FlagModel("BAAI/bge-m3", use_fp16=True)
+    # Use the cached model from hybrid_search to avoid reloading per document
+    from backend.search.hybrid_search import _get_bge_model
+    model = _get_bge_model()
 
     try:
-        qdrant = QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port, timeout=5)
+        qdrant = QdrantClient(host=settings.qdrant_host, port=settings.qdrant_port, timeout=60, check_compatibility=False)
     except Exception as e:
         logger.warning(f"Qdrant connection failed for {doc_id}: {e}")
         return 0
@@ -41,8 +42,10 @@ def generate_and_store_embeddings(doc_id: str, chunks: list[dict]) -> int:
     points = []
     for i, chunk in enumerate(chunks):
         emb = embeddings["dense_vecs"][i].tolist()
+        # Use a deterministic unique ID from the chunk_id to prevent collisions
+        point_id = abs(hash(chunk["chunk_id"])) % (2**63)
         points.append(PointStruct(
-            id=i,
+            id=point_id,
             vector=emb,
             payload={
                 "chunk_id": chunk["chunk_id"],

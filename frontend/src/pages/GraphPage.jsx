@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback, useMemo } from "react";
+import { useEffect, useRef, useState, useCallback } from "react";
 import * as vis from "vis-network/standalone";
 import "vis-network/styles/vis-network.css";
 import { apiFetch } from "../lib/api";
@@ -67,12 +67,6 @@ export default function GraphPage() {
     loadGraph("/graph");
     return () => { if (networkRef.current) networkRef.current.destroy(); };
   }, [loadGraph]);
-
-  const nodeMap = useMemo(() => {
-    const m = {};
-    for (const n of nodes) m[n.id] = n;
-    return m;
-  }, [nodes]);
 
   useEffect(() => {
     if (!containerRef.current || !nodes.length) return;
@@ -151,11 +145,7 @@ export default function GraphPage() {
       },
       groups: GROUP_COLORS,
       physics: { enabled: false },
-      layout: {
-        improvedLayout: true,
-        randomSeed: 42,
-        clusterThreshold: 150,
-      },
+      layout: { improvedLayout: true, randomSeed: 42 },
       interaction: {
         hover: true,
         tooltipDelay: 150,
@@ -171,21 +161,15 @@ export default function GraphPage() {
     const network = new vis.Network(containerRef.current, { nodes: graphNodes, edges: graphEdges }, options);
     networkRef.current = network;
 
-    // Cluster leaf nodes (degree 1) by their parent
-    const leafIds = nodes.filter((n) => (degrees[n.id] || 0) <= 1).map((n) => n.id);
-    if (leafIds.length > 20) {
-      network.clustering.clusterByConnection(1, { processNode: (node, parent) => ({ ...node }) });
-    }
-
     network.on("selectNode", (params) => {
       const nodeId = params.nodes[0];
-      const node = nodeMap[nodeId];
+      const node = nodes.find((n) => n.id === nodeId);
       if (node) setSelected({ ...node, degree: degrees[nodeId] || 0 });
     });
     network.on("deselectNode", () => setSelected(null));
     network.on("hoverNode", () => { document.body.style.cursor = "pointer"; });
     network.on("blurNode", () => { document.body.style.cursor = "default"; });
-  }, [nodes, edges, nodeMap]);
+  }, [nodes, edges]);
 
   const zoomIn = () => networkRef.current?.zoomIn(0.4);
   const zoomOut = () => networkRef.current?.zoomOut(0.4);

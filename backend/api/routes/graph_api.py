@@ -127,7 +127,14 @@ async def graph_overview():
                 "label": rec["rel_type"],
             })
 
-        return {"nodes": list(nodes.values()), "edges": edges}
+        seen = set()
+        deduped = []
+        for e in edges:
+            key = f"{e['from']}|{e['to']}|{e['label']}"
+            if key not in seen:
+                seen.add(key)
+                deduped.append(e)
+        return {"nodes": [n for n in nodes.values() if n.get("label")], "edges": deduped}
     except Exception as e:
         logger.warning(f"Graph overview failed: {e}")
         return {"nodes": [], "edges": [], "warning": "Neo4j unavailable"}

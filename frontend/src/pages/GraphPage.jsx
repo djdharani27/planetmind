@@ -61,7 +61,7 @@ const GROUP_LABELS = {
 };
 
 /* ── Helpers ── */
-function truncate(label, max = 28) {
+function truncate(label, max = 35) {
   if (!label || label.length <= max) return label || "";
   return label.slice(0, max - 1) + "…";
 }
@@ -181,42 +181,36 @@ export default function GraphPage() {
       physics: {
         solver: "forceAtlas2Based",
         forceAtlas2Based: {
-          gravitationalConstant: -60,
-          centralGravity: 0.004,
-          springLength: 300,
-          springConstant: 0.02,
-          damping: 0.7,
-          avoidOverlap: 0.8,
+          gravitationalConstant: -25,
+          centralGravity: 0.001,
+          springLength: 400,
+          springConstant: 0.004,
+          damping: 0.92,
+          avoidOverlap: 0.4,
         },
-        stabilization: { iterations: 300, updateInterval: 40, fit: true },
-        timestep: 0.4,
+        stabilization: { iterations: 500, updateInterval: 25, fit: true },
+        timestep: 0.3,
+        adaptiveTimestep: true,
       },
       layout: { improvedLayout: true, hierarchical: { enabled: false } },
       interaction: {
         hover: true,
         tooltipDelay: 200,
-        navigationButtons: true,
         keyboard: { enabled: true },
         zoomView: true,
         dragView: true,
         hoverConnectedEdges: true,
         selectConnectedEdges: true,
+        hideEdgesOnDrag: false,
+        hideEdgesOnZoom: false,
       },
     };
 
     const net = new vis.Network(containerRef.current, { nodes: vNodes, edges: vEdges }, options);
 
+    /* Fit view once stabilization starts settling */
     net.once("stabilizationIterationsDone", () => {
-      net.setOptions({ physics: { enabled: false } });
       net.fit({ animation: { duration: 400, easingFunction: "easeInOutQuad" } });
-    });
-
-    /* Handle stabilization finishing early */
-    net.on("stabilized", () => {
-      if (net.getOptions().physics.enabled) {
-        net.setOptions({ physics: { enabled: false } });
-        net.fit({ animation: { duration: 400, easingFunction: "easeInOutQuad" } });
-      }
     });
 
     net.on("selectNode", (p) => {

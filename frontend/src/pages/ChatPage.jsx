@@ -184,6 +184,8 @@ export default function ChatPage() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [mode, setMode] = useState("auto");
+  const [processDocs, setProcessDocs] = useState(null);
+  const [processRunning, setProcessRunning] = useState(false);
   const bottomRef = useRef(null);
 
   const scrollToBottom = useCallback(() => {
@@ -193,6 +195,70 @@ export default function ChatPage() {
   useEffect(() => {
     scrollToBottom();
   }, [messages, loading, scrollToBottom]);
+
+  // Load document status when switching to process mode
+  const loadProcessStatus = useCallback(async () => {
+    try {
+      const data = await apiFetch("/documents?page=1&limit=100");
+      setProcessDocs(data.documents || []);
+    } catch {
+      setProcessDocs([]);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (mode === "process") {
+      loadProcessStatus();
+      const interval = setInterval(loadProcessStatus, 5000);
+      return () => clearInterval(interval);
+    }
+  }, [mode, loadProcessStatus]);
+
+  const processAll = async () => {
+    setProcessRunning(true);
+    try {
+      const data = await apiFetch("/agent/process", {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      addMessage({
+        role: "assistant",
+        content: `**Batch processing complete**\n\n- ✅ Processed: ${data.processed || 0}\n- ❌ Failed: ${data.failed || 0}`,
+        intent: "process",
+      });
+      loadProcessStatus();
+    } catch (err) {
+      addMessage({
+        role: "assistant",
+        content: `**Error:** ${err.message}`,
+        intent: "error",
+      });
+    }
+    setProcessRunning(false);
+  };
+
+  const processSingle = async (docId) => {
+    setProcessRunning(true);
+    try {
+      const data = await apiFetch("/agent/process", {
+        method: "POST",
+        body: JSON.stringify({ document_id: docId }),
+      });
+      addMessage({
+        role: "assistant",
+        content: `**Processed:** \`${data.filename}\` → ${data.status}`,
+        intent: "process",
+      });
+      loadProcessStatus();
+    } catch (err) {
+      addMessage({
+        role: "assistant",
+        content: `**Error processing document:** ${err.message}`,
+        intent: "error",
+      });
+    }
+    setProcessRunning(false);
+  };
 
   const addMessage = (msg) => setMessages((prev) => [...prev, msg]);
 
@@ -242,14 +308,23 @@ export default function ChatPage() {
     { id: "compliance", label: "📋 Compliance", desc: "Gaps & audits" },
     { id: "lessons", label: "⚠️ Lessons", desc: "Incidents & risks" },
     { id: "graph", label: "🕸️ Graph", desc: "Knowledge graph" },
+    { id: "process", label: "⚙️ Process", desc: "Embeddings & graphs" },
   ];
 
-  const suggestions = [
-    "Why did the turbine fail?",
-    "Show me compliance gaps",
-    "What lessons were learned?",
-    "Show the knowledge graph",
-  ];
+  const suggestions = {
+    auto: [
+      "Why did the turbine fail?",
+      "Show me compliance gaps",
+      "What lessons were learned?",
+      "Show the knowledge graph",
+    ],
+    process: [
+      "Show me processing status",
+      "Process all pending documents",
+    ],
+  };
+
+  const activeSuggestions = suggestions[mode] || suggestions.auto;
 
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col bg-white text-[#0F172A]">
@@ -289,7 +364,16 @@ export default function ChatPage() {
       {/* ────── Messages ────── */}
       <div className="flex-1 overflow-y-auto px-4 md:px-6">
         <div className="max-w-5xl mx-auto py-6 space-y-5">
-          {messages.length === 0 && !loading && (
+          {messages.length === 0 && !loading && mode === "process" ? (
+            <ProcessDashboard
+              docs={processDocs}
+              loading={processDocs === null}
+              processing={processRunning}
+              onProcessAll={processAll}
+              onProcessSingle={processSingle}
+              onRefresh={loadProcessStatus}
+            />
+          ) : messages.length === 0 && !loading && (
             <div className="flex flex-col items-center justify-center pt-16 pb-8 text-center">
               <div className="w-16 h-16 rounded-2xl bg-[#2563EB]/10 flex items-center justify-center text-3xl mb-4">
                 K
@@ -303,7 +387,7 @@ export default function ChatPage() {
                 insights from all available data sources.
               </p>
               <div className="grid grid-cols-2 gap-2 max-w-md w-full">
-                {suggestions.map((s) => (
+                {activeSuggestions.map((s) => (
                   <button
                     key={s}
                     onClick={() => sendQuery(s)}
@@ -357,6 +441,118 @@ export default function ChatPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+/* ──────── Process Dashboard ──────── */
+function ProcessDashboard({ docs, loading, processing, onProcessAll, onProcessSingle, onRefresh }) {
+  const byStatus = (status) => docs?.filter((d) => d.processing_status === status) || [];
+  const pending = byStatus("uploaded");
+  const failed = byStatus("failed");
+  const completed = byStatus("completed");
+  const inProgress = byStatus("processing");
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center pt-16">
+        <div className="flex gap-1">
+          {[0, 1, 2].map((i) => (
+            <span key={i} className="w-2 h-2 rounded-full bg-[#94A3B8] animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto pt-6 pb-4 space-y-4">
+      {/* Stats cards */}
+      <div className="grid grid-cols-4 gap-3">
+        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 text-center">
+          <div className="text-2xl font-bold text-[#0F172A]">{completed.length}</div>
+          <div className="text-xs text-[#64748B] mt-1">Completed</div>
+        </div>
+        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 text-center">
+          <div className="text-2xl font-bold text-[#2563EB]">{inProgress.length}</div>
+          <div className="text-xs text-[#64748B] mt-1">Processing</div>
+        </div>
+        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 text-center">
+          <div className="text-2xl font-bold text-[#f59e0b]">{pending.length}</div>
+          <div className="text-xs text-[#64748B] mt-1">Pending</div>
+        </div>
+        <div className="bg-white border border-[#E2E8F0] rounded-xl p-4 text-center">
+          <div className="text-2xl font-bold text-[#ef4444]">{failed.length}</div>
+          <div className="text-xs text-[#64748B] mt-1">Failed</div>
+        </div>
+      </div>
+
+      {/* Action buttons */}
+      <div className="flex gap-2">
+        <button
+          onClick={onProcessAll}
+          disabled={processing || (pending.length === 0 && failed.length === 0)}
+          className="bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-40 disabled:cursor-not-allowed px-4 py-2 rounded-lg text-sm font-medium text-white transition-colors"
+        >
+          {processing ? "Processing..." : `Process All Pending (${pending.length + failed.length})`}
+        </button>
+        <button
+          onClick={onRefresh}
+          disabled={processing}
+          className="bg-white border border-[#E2E8F0] hover:border-[#2563EB] px-4 py-2 rounded-lg text-sm text-[#475569] hover:text-[#2563EB] transition-colors"
+        >
+          Refresh
+        </button>
+      </div>
+
+      {/* Document list */}
+      <div className="bg-white border border-[#E2E8F0] rounded-xl overflow-hidden">
+        <div className="px-4 py-3 bg-[#F8FAFC] border-b border-[#E2E8F0]">
+          <span className="text-xs font-semibold text-[#64748B] uppercase tracking-wide">Documents</span>
+        </div>
+        {!docs?.length ? (
+          <div className="p-6 text-center text-sm text-[#94A3B8]">No documents uploaded yet. Go to Upload page first.</div>
+        ) : (
+          <div className="divide-y divide-[#E2E8F0]">
+            {docs.map((doc) => (
+              <div key={doc.id} className="flex items-center justify-between px-4 py-3">
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium text-[#0F172A] truncate">{doc.filename}</p>
+                  <p className="text-xs text-[#64748B]">
+                    {doc.file_type?.split("/").pop() || ""} · {(doc.file_size / 1024).toFixed(0)} KB
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <StatusBadge status={doc.processing_status} />
+                  {(doc.processing_status === "uploaded" || doc.processing_status === "failed") && (
+                    <button
+                      onClick={() => onProcessSingle(doc.id)}
+                      disabled={processing}
+                      className="text-xs bg-[#2563EB] hover:bg-[#1D4ED8] disabled:opacity-40 text-white px-2.5 py-1 rounded-lg transition-colors"
+                    >
+                      Process
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatusBadge({ status }) {
+  const colors = {
+    uploaded: "bg-[#fef3c7] text-[#92400e] border-[#fde68a]",
+    processing: "bg-[#dbeafe] text-[#1e40af] border-[#bfdbfe]",
+    completed: "bg-[#d1fae5] text-[#065f46] border-[#a7f3d0]",
+    failed: "bg-[#fee2e2] text-[#991b1b] border-[#fecaca]",
+  };
+  return (
+    <span className={`text-[11px] px-2 py-0.5 rounded-full border font-medium ${colors[status] || "bg-[#f1f5f9] text-[#475569] border-[#e2e8f0]"}`}>
+      {status}
+    </span>
   );
 }
 

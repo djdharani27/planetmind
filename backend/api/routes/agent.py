@@ -15,6 +15,8 @@ from backend.llm.maintenance_rca import analyze_maintenance
 from backend.llm.compliance_intel import analyze_compliance
 from backend.llm.lessons_engine import analyze_lessons
 from backend.api.routes.graph_api import graph_overview, get_document_graph
+from backend.api import document_service as doc_svc
+from backend.ingestion.pipeline import process_document
 from backend.logging_config import logger
 
 router = APIRouter(prefix="/api/agent", tags=["agent"])
@@ -60,6 +62,14 @@ def detect_intent(query: str) -> str:
         "show graph", "visualize", "connections between"
     ]):
         return "graph"
+
+    # Process / Pipeline
+    if any(kw in q for kw in [
+        "process", "pipeline", "embedding", "pending", "reprocess",
+        "unprocessed", "processing status", "process documents",
+        "process all", "generate embedding", "build graph"
+    ]):
+        return "process"
 
     # Search — explicit lookups
     if any(kw in q for kw in [
@@ -182,6 +192,58 @@ async def agent_query(request: AgentRequest):
                 "answered_at": datetime.now(timezone.utc).isoformat(),
             }
 
+        # Process / Pipeline — no search needed, works on document status
+        if intent == "process":
+            all_docs = doc_svc.list_documents()
+            pending = [d for d in all_docs if d.get("processing_status") in ("uploaded", "failed")]
+            processing = [d for d in all_docs if d.get("processing_status") == "processing"]
+            completed = [d for d in all_docs if d.get("processing_status") == "completed"]
+
+            lines = []
+            total = len(all_docs)
+            lines.append(f"### Document Processing Pipeline\n")
+            lines.append(f"**Total documents:** {total}")
+            lines.append(f"- ✅ **Completed:** {len(completed)}")
+            lines.append(f"- ⏳ **Processing:** {len(processing)}")
+            lines.append(f"- ⏸️ **Pending/Failed:** {len(pending)}")
+            lines.append("")
+
+            if pending:
+                lines.append("**Pending documents (click to process):**")
+                for d in pending[:10]:
+                    fid = d.get("filename", "unknown")
+                    pid = d["id"]
+                    status_icon = "❌" if d.get("processing_status") == "failed" else "⏸️"
+                    lines.append(f"- {status_icon} `{fid}` — `{pid[:8]}...`")
+                lines.append("")
+
+            if processing:
+                lines.append("**Currently processing:**")
+                for d in processing[:5]:
+                    lines.append(f"- ⏳ `{d.get('filename', 'unknown')}`")
+
+            answer = "\n".join(lines) if lines else "No documents found."
+            return {
+                "answer": answer,
+                "intent": "process",
+                "tools_used": tools_used,
+                "structured_data": {
+                    "total": total,
+                    "completed": len(completed),
+                    "processing": len(processing),
+                    "pending": len(pending),
+                    "documents": [
+                        {"id": d["id"], "filename": d.get("filename", "unknown"),
+                         "status": d.get("processing_status", "unknown"),
+                         "type": d.get("file_type", ""), "size": d.get("file_size", 0)}
+                        for d in all_docs[:50]
+                    ],
+                },
+                "sources": [],
+                "confidence": 100,
+                "answered_at": datetime.now(timezone.utc).isoformat(),
+            }
+
         # Search, Chat, Maintenance, Compliance, Lessons — all need search results
         search_results = hybrid_search(query, request.top_k)["results"]
 
@@ -282,3 +344,58 @@ def _sources_block(sources: list) -> str:
         snippet = s.get("snippet", "")[:60]
         lines.append(f"- `{sid[:12]}...` {snippet}")
     return "\n".join(lines)
+
+
+class ProcessActionRequest(BaseModel):
+    document_id: str | None = None
+
+
+@router.post("/process")
+async def process_documents(request: ProcessActionRequest):
+    """Trigger document processing — all pending if no document_id specified, or a specific document."""
+    try:
+        if request.document_id:
+            doc = doc_svc.get_document(request.document_id)
+            if not doc:
+                raise HTTPException(404, f"Document {request.document_id} not found")
+            result = process_document(request.document_id)
+            return {
+                "status": "completed",
+                "document_id": request.document_id,
+                "filename": doc.get("filename", "unknown"),
+                "result": result,
+            }
+
+        all_docs = doc_svc.list_documents()
+        pending = [d for d in all_docs if d.get("processing_status") in ("uploaded", "failed")]
+        if not pending:
+            return {"status": "no_pending", "message": "No pending documents to process.", "processed": 0}
+
+        results = []
+        for doc in pending[:10]:  # Process up to 10 at a time
+            try:
+                result = process_document(doc["id"])
+                results.append({
+                    "document_id": doc["id"],
+                    "filename": doc.get("filename", "unknown"),
+                    "status": "completed",
+                })
+            except Exception as e:
+                results.append({
+                    "document_id": doc["id"],
+                    "filename": doc.get("filename", "unknown"),
+                    "status": "failed",
+                    "error": str(e),
+                })
+
+        return {
+            "status": "batch_completed",
+            "processed": len([r for r in results if r["status"] == "completed"]),
+            "failed": len([r for r in results if r["status"] == "failed"]),
+            "results": results,
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Process action failed: {e}", exc_info=True)
+        raise HTTPException(500, str(e))

@@ -152,9 +152,19 @@ async def agent_query(request: AgentRequest):
         # 2. Route to the right tool
         if intent == "graph":
             graph_data = await graph_overview()
+            if graph_data.get("warning"):
+                return {
+                    "answer": "The knowledge graph is currently unavailable. Neo4j doesn't appear to be running — start it with `docker compose -f docker/docker-compose.yml up -d neo4j`.",
+                    "intent": "graph",
+                    "tools_used": tools_used,
+                    "graph_data": {"nodes": [], "edges": []},
+                    "sources": [],
+                    "confidence": 0,
+                    "answered_at": datetime.now(timezone.utc).isoformat(),
+                }
             if not graph_data.get("nodes"):
                 return {
-                    "answer": "The knowledge graph is currently unavailable. This usually means Neo4j isn't running. Try starting the Neo4j service first.",
+                    "answer": "Your knowledge graph is empty — there are no entities yet. Upload and process documents to populate it with equipment, failures, components, and their relationships.",
                     "intent": "graph",
                     "tools_used": tools_used,
                     "graph_data": {"nodes": [], "edges": []},

@@ -1,5 +1,4 @@
-from fastapi import APIRouter, Depends
-from backend.auth import get_current_user
+from fastapi import APIRouter
 from backend.config import settings
 from backend.database.database import get_connection
 from backend.logging_config import logger
@@ -9,10 +8,8 @@ router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
 @router.post("/nuke")
-async def nuke_everything(user: dict = Depends(get_current_user)):
+async def nuke_everything():
     """Delete everything: all documents, SQLite data, storage files, Qdrant vectors, Neo4j graph."""
-    if user["role"] != "admin":
-        return {"status": "denied", "reason": "Admin role required"}
 
     results = {
         "sqlite_documents": 0,

@@ -95,10 +95,10 @@ export default function GraphPage() {
     const vEdges = new vis.DataSet(edges.map((e, i) => ({
       id: e.id || `e${i}`,
       from: e.from, to: e.to,
-      arrows: { to: { enabled: true, scaleFactor: 0.5 } },
-      color: { color: "#374151", highlight: "#6366f1", hover: "#6366f1" },
+      arrows: { to: { enabled: true, scaleFactor: 0.4 } },
+      color: { color: "#64748b", highlight: "#818cf8", hover: "#818cf8" },
       smooth: { type: "continuous", roundness: 0.15 },
-      width: 1,
+      width: 1.5,
     })));
 
     const net = new vis.Network(containerRef.current, { nodes: vNodes, edges: vEdges }, {
@@ -109,15 +109,22 @@ export default function GraphPage() {
         scaling: { min: 16, max: 50, label: { enabled: true, min: 8, max: 13 } },
       },
       edges: {
-        width: 1, color: { color: "#374151", highlight: "#6366f1", hover: "#6366f1" },
+        width: 1.5, color: { color: "#475569", highlight: "#818cf8", hover: "#818cf8" },
         smooth: { type: "continuous", roundness: 0.15 },
       },
       groups: GROUP_COLORS,
       physics: {
-        solver: "barnesHut",
-        barnesHut: { gravitationalConstant: -2000, centralGravity: 0.1, springLength: 120, springConstant: 0.04, damping: 0.5 },
-        stabilization: { iterations: 80, updateInterval: 25, fit: true },
-        timestep: 0.3,
+        solver: "forceAtlas2Based",
+        forceAtlas2Based: {
+          gravitationalConstant: -40,
+          centralGravity: 0.005,
+          springLength: 250,
+          springConstant: 0.03,
+          damping: 0.6,
+          avoidOverlap: 0.7,
+        },
+        stabilization: { iterations: 200, updateInterval: 50, fit: true },
+        timestep: 0.5,
       },
       layout: { improvedLayout: false },
       interaction: {

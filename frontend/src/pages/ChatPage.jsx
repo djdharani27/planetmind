@@ -87,18 +87,7 @@ function InlineGraph({ nodes: rawNodes, edges: rawEdges }) {
       },
       edges: { width: 1, selectionWidth: 2 },
       groups: GROUP_COLORS,
-      physics: {
-        solver: "forceAtlas2Based",
-        forceAtlas2Based: {
-          gravitationalConstant: -50,
-          centralGravity: 0.002,
-          springLength: 150,
-          springConstant: 0.03,
-          damping: 0.4,
-          avoidOverlap: 0.7,
-        },
-        stabilization: { iterations: 150 },
-      },
+      physics: { enabled: false },
       interaction: {
         hover: true,
         tooltipDelay: 80,

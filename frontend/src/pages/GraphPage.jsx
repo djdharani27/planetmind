@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState, useCallback, useMemo } from "react";
 import * as vis from "vis-network/standalone";
 import "vis-network/styles/vis-network.css";
 import { apiFetch } from "../lib/api";
@@ -44,8 +44,6 @@ export default function GraphPage() {
   const [edges, setEdges] = useState([]);
   const [selected, setSelected] = useState(null);
   const [loading, setLoading] = useState(false);
-  const [physicsOn, setPhysicsOn] = useState(true);
-
   const loadGraph = useCallback(async (path) => {
     setLoading(true);
     try {
@@ -70,6 +68,12 @@ export default function GraphPage() {
     return () => { if (networkRef.current) networkRef.current.destroy(); };
   }, [loadGraph]);
 
+  const nodeMap = useMemo(() => {
+    const m = {};
+    for (const n of nodes) m[n.id] = n;
+    return m;
+  }, [nodes]);
+
   useEffect(() => {
     if (!containerRef.current || !nodes.length) return;
     if (networkRef.current) networkRef.current.destroy();
@@ -80,7 +84,7 @@ export default function GraphPage() {
     const graphNodes = new vis.DataSet(
       nodes.map((n) => {
         const deg = degrees[n.id] || 1;
-        const size = 16 + (deg / maxDeg) * 34;
+        const size = 18 + (deg / maxDeg) * 32;
         const group = n.group || "Unknown";
         return {
           id: n.id,
@@ -96,7 +100,6 @@ export default function GraphPage() {
           size,
           borderWidth: deg > maxDeg * 0.5 ? 3 : 2,
           borderWidthSelected: 4,
-          mass: 1 + (deg / maxDeg) * 2,
         };
       })
     );
@@ -109,12 +112,7 @@ export default function GraphPage() {
         label: e.label,
         title: e.label,
         arrows: { to: { enabled: true, scaleFactor: 0.6 } },
-        font: {
-          size: 8,
-          color: "#6b7280",
-          strokeWidth: 0,
-          align: "middle",
-        },
+        font: { size: 8, color: "#6b7280", strokeWidth: 0, align: "middle" },
         color: { color: "#374151", highlight: "#6366f1", hover: "#6366f1" },
         smooth: { type: "continuous", roundness: 0.15 },
         width: 1,
@@ -141,13 +139,7 @@ export default function GraphPage() {
         },
         borderWidth: 2,
         borderWidthSelected: 4,
-        scaling: {
-          min: 16,
-          max: 50,
-          label: { enabled: true, min: 8, max: 13 },
-        },
-        mass: 1.5,
-        shapeProperties: { useBorderWithImage: true },
+        scaling: { min: 16, max: 50, label: { enabled: true, min: 8, max: 13 } },
       },
       edges: {
         width: 1,
@@ -158,25 +150,11 @@ export default function GraphPage() {
         font: { size: 8, color: "#6b7280", strokeWidth: 0, align: "middle" },
       },
       groups: GROUP_COLORS,
-      physics: {
-        enabled: physicsOn,
-        solver: "forceAtlas2Based",
-        forceAtlas2Based: {
-          gravitationalConstant: -60,
-          centralGravity: 0.001,
-          springLength: 250,
-          springConstant: 0.02,
-          damping: 0.5,
-          avoidOverlap: 0.8,
-        },
-        stabilization: {
-          iterations: 400,
-          updateInterval: 30,
-          onlyDynamicEdges: false,
-          fit: true,
-        },
-        timestep: 0.4,
-        adaptiveTimestep: true,
+      physics: { enabled: false },
+      layout: {
+        improvedLayout: true,
+        randomSeed: 42,
+        clusterThreshold: 150,
       },
       interaction: {
         hover: true,
@@ -188,36 +166,26 @@ export default function GraphPage() {
         hoverConnectedEdges: true,
         selectConnectedEdges: true,
       },
-      layout: {
-        improvedLayout: true,
-        randomSeed: 42,
-      },
     };
 
     const network = new vis.Network(containerRef.current, { nodes: graphNodes, edges: graphEdges }, options);
     networkRef.current = network;
 
+    // Cluster leaf nodes (degree 1) by their parent
+    const leafIds = nodes.filter((n) => (degrees[n.id] || 0) <= 1).map((n) => n.id);
+    if (leafIds.length > 20) {
+      network.clustering.clusterByConnection(1, { processNode: (node, parent) => ({ ...node }) });
+    }
+
     network.on("selectNode", (params) => {
       const nodeId = params.nodes[0];
-      const node = nodes.find((n) => n.id === nodeId);
-      setSelected({ ...node, degree: degrees[nodeId] || 0 });
+      const node = nodeMap[nodeId];
+      if (node) setSelected({ ...node, degree: degrees[nodeId] || 0 });
     });
     network.on("deselectNode", () => setSelected(null));
     network.on("hoverNode", () => { document.body.style.cursor = "pointer"; });
     network.on("blurNode", () => { document.body.style.cursor = "default"; });
-
-    network.on("stabilizationProgress", (params) => {
-      if (params.iterations % 50 === 0) {
-        const pct = Math.round((params.iterations / params.total) * 100);
-        containerRef.current?.setAttribute("data-progress", `${pct}%`);
-      }
-    });
-    network.once("stabilizationIterationsDone", () => {
-      containerRef.current?.removeAttribute("data-progress");
-    });
-  }, [nodes, edges, physicsOn]);
-
-  const togglePhysics = () => setPhysicsOn((p) => !p);
+  }, [nodes, edges, nodeMap]);
 
   const zoomIn = () => networkRef.current?.zoomIn(0.4);
   const zoomOut = () => networkRef.current?.zoomOut(0.4);
@@ -274,15 +242,6 @@ export default function GraphPage() {
             <button onClick={zoomIn} title="Zoom in" className="bg-gray-800 hover:bg-gray-700 px-2.5 py-2 rounded-lg text-sm transition-colors">＋</button>
             <button onClick={zoomOut} title="Zoom out" className="bg-gray-800 hover:bg-gray-700 px-2.5 py-2 rounded-lg text-sm transition-colors">−</button>
             <button onClick={resetView} title="Fit view" className="bg-gray-800 hover:bg-gray-700 px-2.5 py-2 rounded-lg text-sm transition-colors">⊞</button>
-            <button
-              onClick={togglePhysics}
-              title={physicsOn ? "Freeze layout" : "Enable physics"}
-              className={`px-3 py-2 rounded-lg text-sm transition-colors ${
-                physicsOn ? "bg-blue-600 hover:bg-blue-500" : "bg-gray-800 hover:bg-gray-700"
-              }`}
-            >
-              {physicsOn ? "⏸ Freeze" : "▶ Animate"}
-            </button>
           </div>
         </div>
 

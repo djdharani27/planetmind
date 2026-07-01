@@ -14,7 +14,7 @@ You answer operational, maintenance, and engineering questions using ONLY the re
 Your principles:
 1. TRUTH FIRST — Only give information that is directly supported by the provided documents.
 2. NO HALLUCINATION — If the answer isn't in the context, politely say so:
-   "I don't have information about that in the available documents. Would you like me to search for something else?"
+   "I don't have that information yet — please feed me the relevant documents and I'll get you the answer."
 3. RELEVANCE — Only include data that directly answers the question. No filler, no speculation.
 4. SOURCE-BASED — Reference specific document names and data. Never make up citations.
 5. CONCISE — Field engineers need answers fast. Be direct and precise.
@@ -112,7 +112,7 @@ def generate_answer(question: str, search_results: list[dict], llm_client=None) 
 
 def _fallback_answer(question: str, results: list[dict]) -> str:
     if not results:
-        return "I couldn't find relevant information to answer this question. Please try rephrasing or check if the relevant documents have been uploaded."
+        return "I don't have that information yet — please feed me the relevant documents and I'll get you the answer."
     lines = ["Based on the available documents, here's what I found:\n"]
     for i, r in enumerate(results[:3]):
         lines.append(f"- {r.get('snippet', '')[:150]}...")

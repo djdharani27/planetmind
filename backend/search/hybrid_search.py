@@ -127,17 +127,43 @@ def _bm25_search(query: str, top_k: int) -> list[dict]:
 # ── Merge & Rerank ──
 
 def _merge_and_rerank(query: str, results: list[dict], top_k: int) -> list[dict]:
+    # 1. Deduplicate by document_id, keeping highest-scoring instance
     seen_ids = set()
     deduplicated = []
-    for r in sorted(results, key=lambda x: x["score"], reverse=True):
-        if r.get("document_id") not in seen_ids:
-            seen_ids.add(r["document_id"])
+    for r in sorted(results, key=lambda x: x.get("score", 0), reverse=True):
+        doc_id = r.get("document_id")
+        if doc_id and doc_id not in seen_ids:
+            seen_ids.add(doc_id)
             deduplicated.append(r)
 
-    # Score-based ordering (skip expensive BGE reranker for speed)
-    for c in deduplicated:
-        c["rerank_score"] = c.get("rerank_score", c.get("score", 0))
-    deduplicated.sort(key=lambda x: x["rerank_score"], reverse=True)
+    if not deduplicated:
+        return []
+
+    # 2. Reciprocal Rank Fusion across the three source types
+    k = 60
+    fused = {}
+    for i, r in enumerate(deduplicated):
+        rank = i + 1
+        fused[r["document_id"]] = fused.get(r["document_id"], 0) + 1.0 / (k + rank)
+    for r in deduplicated:
+        r["fused_score"] = fused.get(r["document_id"], r.get("score", 0))
+
+    # 3. BGE Reranker-v2-m3 cross-encoder on top candidates
+    try:
+        reranker = _get_reranker()
+        candidates = deduplicated[:max(top_k * 3, 20)]
+        pairs = [[query, r.get("snippet", "")[:500]] for r in candidates]
+        scores = reranker.compute_score(pairs, normalize=True)
+        if isinstance(scores, float):
+            scores = [scores]
+        for i, r in enumerate(candidates[:len(scores)]):
+            r["rerank_score"] = float(scores[i]) if scores[i] is not None else r.get("fused_score", 0)
+    except Exception as e:
+        logger.info(f"BGE reranker unavailable, using fused scores: {e}")
+        for r in deduplicated:
+            r["rerank_score"] = r.get("fused_score", r.get("score", 0))
+
+    deduplicated.sort(key=lambda x: x.get("rerank_score", 0), reverse=True)
     return deduplicated[:top_k]
 
 
@@ -181,8 +207,16 @@ def _vector_search(query: str, top_k: int) -> list[dict]:
 
 def _graph_search(query: str, top_k: int) -> list[dict]:
     try:
-        from backend.graph.graph_searcher import search_graph
-        return search_graph(query, top_k)
+        import asyncio
+        import concurrent.futures
+        from backend.graphiti.retriever import graphiti_search
+
+        def _run_in_thread():
+            return asyncio.run(graphiti_search(query, top_k))
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as ex:
+            future = ex.submit(_run_in_thread)
+            return future.result(timeout=15)
     except Exception as e:
         logger.info(f"Graph search unavailable: {e}")
         return []

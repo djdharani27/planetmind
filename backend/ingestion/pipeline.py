@@ -100,17 +100,38 @@ def process_document(doc_id: str, llm_client=None) -> dict:
         _update_status(doc_id, "embeddings_complete")
         steps["embed"] = "skipped_no_service"
 
-    # Step 5: Entity extraction
-    from backend.llm.entity_extractor import extract_entities
-    entities = extract_entities(doc_id, text, llm_client)
-    with open(output_dir / "entities.json", "w", encoding="utf-8") as f:
-        json.dump(entities, f, ensure_ascii=False, indent=2)
-    steps["entities"] = "completed"
-    _update_status(doc_id, "entities_complete")
+    # Step 5: Graphiti Episode Ingestion (replaces entity extraction)
+    # Graphiti auto-extracts entities, relationships, and temporal facts into Neo4j
+    entities_count = 0
+    try:
+        import asyncio
+        from backend.graphiti.service import get_graphiti
 
-    # Step 6: Graph — entities are already saved on disk for the graph API to read
-    steps["graph"] = "completed"
-    _update_status(doc_id, "graph_complete")
+        async def _ingest_graphiti():
+            graphiti = get_graphiti()
+            if not graphiti.is_available:
+                await graphiti.initialize()
+            return await graphiti.ingest_document_episode(
+                doc_id=doc_id,
+                filename=doc["filename"],
+                text=text,
+                chunks=chunks,
+            )
+
+        result = asyncio.run(_ingest_graphiti())
+        if "error" in result:
+            logger.warning(f"Graphiti ingestion skipped for {doc_id}: {result['error']}")
+            steps["entities"] = "skipped_graphiti_unavailable"
+            entities_count = 0
+        else:
+            entities_count = result.get("entity_count", 0)
+            steps["entities"] = f"graphiti_{entities_count}_entities"
+    except Exception as e:
+        logger.warning(f"Graphiti ingestion skipped for {doc_id}: {e}")
+        steps["entities"] = "skipped_graphiti_unavailable"
+
+    # Step 6: Graph — Graphiti creates entities + relationships atomically
+    steps["graph"] = "graphiti_completed" if entities_count > 0 else "skipped"
 
     # Step 7: Save text and update metadata
     with open(output_dir / "ocr_output.json", "w", encoding="utf-8") as f:
@@ -119,12 +140,12 @@ def process_document(doc_id: str, llm_client=None) -> dict:
     conn = get_connection()
     conn.execute(
         "UPDATE documents SET processing_status = ?, metadata = ? WHERE id = ?",
-        ("ready", json.dumps({"text_length": len(text), "chunks": len(chunks), "entities": len(entities)}), doc_id),
+        ("ready", json.dumps({"text_length": len(text), "chunks": len(chunks), "graphiti_entities": entities_count}), doc_id),
     )
     conn.commit()
     conn.close()
 
-    logger.info(f"Processing complete for {doc_id}: {len(text)} chars, {len(chunks)} chunks, {len(entities)} entities")
+    logger.info(f"Processing complete for {doc_id}: {len(text)} chars, {len(chunks)} chunks, {entities_count} graphiti entities")
     return {"status": "ready", "steps": steps}
 
 

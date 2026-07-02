@@ -24,7 +24,7 @@ class TestSearchMerge:
             {"document_id": "mid", "score": 0.5, "snippet": "mid score"},
         ]
         merged = _merge_and_rerank("test", results, top_k=3)
-        assert merged[0]["score"] >= merged[1]["score"] >= merged[2]["score"]
+        assert merged[0]["rerank_score"] >= merged[1]["rerank_score"] >= merged[2]["rerank_score"]
 
     def test_top_k_truncation(self):
         results = [

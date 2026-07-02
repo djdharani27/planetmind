@@ -32,6 +32,12 @@ class Settings(BaseSettings):
     neo4j_uri: str = "bolt://localhost:7687"
     neo4j_user: str = "neo4j"
     neo4j_password: str = "password"
+    neo4j_database: str = "neo4j"
+
+    # Graphiti temporal knowledge graph
+    graphiti_llm_model: str = ""
+    graphiti_embedding_model: str = ""
+    graphiti_semaphore_limit: int = 5
 
     jwt_secret: str = "change-me-in-production"
     jwt_expire_minutes: int = 480

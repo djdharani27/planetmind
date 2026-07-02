@@ -7,6 +7,8 @@ backend agent: chat, search, maintenance, compliance, lessons, or knowledge grap
 
 import json
 import random
+import uuid
+import asyncio
 from datetime import datetime, timezone
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel
@@ -27,6 +29,7 @@ class AgentRequest(BaseModel):
     query: str
     top_k: int = 15
     mode: str = "auto"  # auto | chat | search | maintenance | compliance | lessons | graph
+    session_id: str = ""  # conversation session identifier (auto-generated if empty)
 
 
 def detect_intent(query: str) -> str:
@@ -369,21 +372,43 @@ async def agent_query(request: AgentRequest):
         # Default: general chat / Q&A
         # The ReAct agent handles search internally via tool calling
         answer = await generate_answer(query)
+        answer_text = answer.get("answer", "I couldn't find an answer to that question.")
+
+        # Fire-and-forget: ingest conversation turn into Graphiti memory
+        sid = request.session_id or str(uuid.uuid4())
+        asyncio.create_task(_ingest_chat_turn(sid, query, answer_text))
 
         return {
-            "answer": answer.get("answer", "I couldn't find an answer to that question."),
+            "answer": answer_text,
             "intent": "chat",
             "tools_used": tools_used,
             "sources": answer.get("sources", []),
             "confidence": answer.get("confidence", 50),
             "related": answer.get("related", {}),
             "graph_data": answer.get("graph_data"),
+            "session_id": sid,
             "answered_at": answer.get("answered_at", datetime.now(timezone.utc).isoformat()),
         }
 
     except Exception as e:
         logger.error(f"Agent query failed: {e}", exc_info=True)
         raise HTTPException(500, f"Agent processing failed: {str(e)}")
+
+
+async def _ingest_chat_turn(session_id: str, query: str, answer: str):
+    """Ingest a chat conversation turn into Graphiti as a temporal episode."""
+    try:
+        from backend.graphiti.service import get_graphiti
+        graphiti = get_graphiti()
+        if not graphiti.is_available:
+            await graphiti.initialize()
+        await graphiti.ingest_conversation_episode(
+            session_id=session_id,
+            user_message=query,
+            assistant_response=answer,
+        )
+    except Exception as e:
+        logger.warning(f"Chat ingestion skipped for session {session_id}: {e}")
 
 
 def _sources_block(sources: list) -> str:

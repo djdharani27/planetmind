@@ -7,6 +7,18 @@ import shutil
 router = APIRouter(prefix="/api/admin", tags=["admin"])
 
 
+@router.post("/migrate-graph")
+async def migrate_graph():
+    """Run one-shot migration from legacy entities.json files to Graphiti episodes."""
+    try:
+        from backend.graphiti.migrations import migrate_legacy_entities
+        result = await migrate_legacy_entities()
+        return {"status": "completed", **result}
+    except Exception as e:
+        logger.error(f"Graph migration failed: {e}")
+        return {"status": "failed", "error": str(e)}
+
+
 @router.post("/nuke")
 async def nuke_everything():
     """Delete everything: all documents, SQLite data, storage files, Qdrant vectors, Neo4j graph."""

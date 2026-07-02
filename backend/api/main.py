@@ -21,6 +21,16 @@ from backend.api.routes.agent import router as agent_router
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     init_db()
+
+    # Initialize Graphiti (best-effort, non-blocking)
+    try:
+        from backend.graphiti.service import get_graphiti
+        graphiti = get_graphiti()
+        await graphiti.initialize()
+        logger.info("Graphiti knowledge graph initialized")
+    except Exception as e:
+        logger.warning(f"Graphiti initialization deferred: {e}")
+
     logger.info(f"{settings.app_name} v{settings.app_version} starting up")
     yield
     logger.info(f"{settings.app_name} shutting down")

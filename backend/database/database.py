@@ -39,6 +39,22 @@ def init_db() -> None:
         )
     """)
 
+    conn.execute("""
+        CREATE TABLE IF NOT EXISTS conversations (
+            id TEXT PRIMARY KEY,
+            session_id TEXT NOT NULL,
+            role TEXT NOT NULL,
+            content TEXT NOT NULL,
+            timestamp TEXT NOT NULL DEFAULT (datetime('now')),
+            metadata TEXT DEFAULT '{}'
+        )
+    """)
+
+    conn.execute("""
+        CREATE INDEX IF NOT EXISTS idx_conversations_session
+        ON conversations(session_id, timestamp)
+    """)
+
     conn.commit()
 
     _seed_default_user(conn)

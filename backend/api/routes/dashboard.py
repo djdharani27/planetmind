@@ -6,18 +6,6 @@ from backend.logging_config import logger
 router = APIRouter(prefix="/api/dashboard", tags=["dashboard"])
 
 
-def _get_neo4j_connection():
-    try:
-        from neo4j import GraphDatabase
-        return GraphDatabase.driver(
-            settings.neo4j_uri,
-            auth=(settings.neo4j_user, settings.neo4j_password),
-            connection_timeout=3,
-        )
-    except ImportError:
-        return None
-
-
 @router.get("")
 async def dashboard():
     conn = get_connection()
@@ -33,14 +21,12 @@ async def dashboard():
     graph_nodes = 0
     graph_rels = 0
     try:
-        driver = _get_neo4j_connection()
-        if driver:
-            with driver.session() as session:
-                nodes_result = session.run("MATCH (n) RETURN count(n) AS cnt").single()
-                rels_result = session.run("MATCH ()-[r]->() RETURN count(r) AS cnt").single()
-                graph_nodes = nodes_result["cnt"] if nodes_result else 0
-                graph_rels = rels_result["cnt"] if rels_result else 0
-            driver.close()
+        from backend.graphiti.service import get_graphiti
+        graphiti = get_graphiti()
+        await graphiti.initialize()
+        health = await graphiti.health_check()
+        graph_nodes = health.get("node_count", 0)
+        graph_rels = health.get("edge_count", 0)
     except Exception:
         pass
 

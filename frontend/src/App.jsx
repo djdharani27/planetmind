@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route, NavLink } from "react-router-dom";
 import { useState } from "react";
+import { useAuth } from "./context/AuthContext";
 import UploadPage from "./pages/UploadPage";
 import DashboardPage from "./pages/DashboardPage";
 import SearchPage from "./pages/SearchPage";
@@ -10,6 +11,7 @@ import CompliancePage from "./pages/CompliancePage";
 import LessonsPage from "./pages/LessonsPage";
 import GraphPage from "./pages/GraphPage";
 import AdminPage from "./pages/AdminPage";
+import LoginPage from "./pages/LoginPage";
 
 const nav = [
   { to: "/", label: "Dashboard" },
@@ -25,6 +27,7 @@ const nav = [
 
 function AppRoutes() {
   const [menuOpen, setMenuOpen] = useState(false);
+  const { user, logout } = useAuth();
 
   return (
     <div className="min-h-screen bg-gray-950 text-white">
@@ -52,6 +55,16 @@ function AppRoutes() {
               {label}
             </NavLink>
           ))}
+          <div className="md:ml-auto flex items-center gap-2 pt-1 md:pt-0 border-t md:border-0 border-gray-800">
+            {user ? (
+              <>
+                <span className="text-xs text-gray-500">{user.username}</span>
+                <button onClick={logout} className="text-xs text-gray-400 hover:text-white transition-colors">Logout</button>
+              </>
+            ) : (
+              <NavLink to="/login" className="text-xs text-gray-400 hover:text-white transition-colors">Sign In</NavLink>
+            )}
+          </div>
         </div>
       </nav>
       <Routes>
@@ -64,6 +77,7 @@ function AppRoutes() {
         <Route path="/lessons" element={<LessonsPage />} />
         <Route path="/graph" element={<GraphPage />} />
         <Route path="/admin" element={<AdminPage />} />
+        <Route path="/login" element={<LoginPage />} />
         <Route path="/documents/:id" element={<DocViewer />} />
       </Routes>
     </div>

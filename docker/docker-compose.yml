@@ -51,12 +51,13 @@ services:
     restart: unless-stopped
 
   neo4j:
-    image: neo4j:5.25
+    image: neo4j:5.26
     ports:
       - "7474:7474"
       - "7687:7687"
     environment:
       - NEO4J_AUTH=neo4j/password
+      - NEO4J_PLUGINS=["apoc"]
     volumes:
       - ../data:/data
     healthcheck:
@@ -65,4 +66,3 @@ services:
       timeout: 10s
       retries: 5
     restart: unless-stopped
-d
